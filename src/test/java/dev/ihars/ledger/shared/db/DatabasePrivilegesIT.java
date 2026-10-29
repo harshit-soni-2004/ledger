@@ -30,16 +30,20 @@ class DatabasePrivilegesIT extends IntegrationTest {
         assertThat(grants).containsExactlyInAnyOrder(
                 "GRANT USAGE ON *.* TO `ledger_app`@`%`",
                 "GRANT SELECT ON `ledger`.`currencies` TO `ledger_app`@`%`",
-                "GRANT SELECT, INSERT ON `ledger`.`accounts` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT, UPDATE (`status`, `updated_at`) ON `ledger`.`accounts` TO `ledger_app`@`%`",
                 "GRANT SELECT, INSERT, UPDATE (`balance`, `last_entry_seq`, `updated_at`) ON `ledger`.`account_balances` TO `ledger_app`@`%`",
                 "GRANT SELECT, INSERT ON `ledger`.`journal_transactions` TO `ledger_app`@`%`",
                 "GRANT SELECT, INSERT ON `ledger`.`ledger_entries` TO `ledger_app`@`%`",
-                "GRANT SELECT, INSERT ON `ledger`.`audit_events` TO `ledger_app`@`%`");
+                "GRANT SELECT, INSERT ON `ledger`.`audit_events` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT, UPDATE (`status`, `updated_at`) ON `ledger`.`api_clients` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT, UPDATE (`revoked_at`, `status`) ON `ledger`.`api_keys` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT, UPDATE (`resource_id`, `response_body`, `response_status`) ON `ledger`.`idempotency_records` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT ON `ledger`.`integrity_check_runs` TO `ledger_app`@`%`");
     }
 
     @Test
     void appUserCannotUpdateOrDeleteAppendOnlyTables() {
-        for (String table : List.of("journal_transactions", "ledger_entries", "audit_events")) {
+        for (String table : List.of("journal_transactions", "ledger_entries", "audit_events", "integrity_check_runs")) {
             assertDenied(() -> jdbc.sql("UPDATE " + table + " SET id = id WHERE id = -1").update());
             assertDenied(() -> jdbc.sql("DELETE FROM " + table + " WHERE id = -1").update());
             assertDenied(() -> jdbc.sql("TRUNCATE TABLE " + table).update());
@@ -47,10 +51,42 @@ class DatabasePrivilegesIT extends IntegrationTest {
     }
 
     @Test
-    void appUserCannotChangeOrDeleteAccounts() {
-        assertDenied(() -> jdbc.sql("UPDATE accounts SET status = 'CLOSED' WHERE id = -1").update());
-        assertDenied(() -> jdbc.sql("DELETE FROM accounts WHERE id = -1").update());
-        assertDenied(() -> jdbc.sql("DELETE FROM account_balances WHERE account_id = -1").update());
+    void appUserCannotDeleteAccountsClientsKeysOrIdempotencyRecords() {
+        for (String table : List.of("accounts", "account_balances", "api_clients", "api_keys", "idempotency_records")) {
+            assertDenied(() -> jdbc.sql("DELETE FROM " + table + " WHERE 1 = 0").update());
+            assertDenied(() -> jdbc.sql("TRUNCATE TABLE " + table).update());
+        }
+    }
+
+    @Test
+    void appUserMayChangeOnlyTheLifecycleColumnsOfAccountsClientsAndKeys() {
+        assertThat(jdbc.sql("UPDATE accounts SET status = status, updated_at = updated_at WHERE id = -1").update())
+                .isZero();
+        assertThat(jdbc.sql("UPDATE api_clients SET status = status, updated_at = updated_at WHERE id = -1").update())
+                .isZero();
+        assertThat(jdbc.sql("UPDATE api_keys SET status = status, revoked_at = revoked_at WHERE id = -1").update())
+                .isZero();
+
+        for (String column : List.of("name", "type", "normal_balance", "currency", "overdraft_policy",
+                "overdraft_limit", "owner_client_id", "system_code", "public_id")) {
+            assertColumnDenied("UPDATE accounts SET " + column + " = " + column + " WHERE id = -1");
+        }
+        for (String column : List.of("role", "name", "public_id")) {
+            assertColumnDenied("UPDATE api_clients SET " + column + " = " + column + " WHERE id = -1");
+        }
+        for (String column : List.of("key_hash", "client_id", "expires_at", "key_prefix")) {
+            assertColumnDenied("UPDATE api_keys SET " + column + " = " + column + " WHERE id = -1");
+        }
+        for (String column : List.of("request_hash", "idempotency_key", "client_id", "operation", "expires_at")) {
+            assertColumnDenied("UPDATE idempotency_records SET " + column + " = " + column + " WHERE id = -1");
+        }
+    }
+
+    private void assertColumnDenied(String sql) {
+        assertThatThrownBy(() -> jdbc.sql(sql).update())
+                .as(sql)
+                .isInstanceOf(DataAccessException.class)
+                .satisfies(e -> assertThat(mysqlErrorCode(e)).contains(COLUMN_ACCESS_DENIED));
     }
 
     @Test
