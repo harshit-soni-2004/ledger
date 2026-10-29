@@ -131,6 +131,7 @@ public abstract class IntegrationTest {
         registry.add("LEDGER_DB_MIGRATION_USER", () -> MIGRATION_USER);
         registry.add("LEDGER_DB_MIGRATION_PASSWORD", () -> MIGRATION_PASSWORD);
         registry.add("LEDGER_BOOTSTRAP_ADMIN_KEY", () -> ADMIN_KEY);
+        registry.add("LEDGER_INTEGRITY_SCHEDULE_ENABLED", () -> "false");
     }
 
     private static String jdbcUrl() {

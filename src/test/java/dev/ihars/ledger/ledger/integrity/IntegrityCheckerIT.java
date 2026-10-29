@@ -45,7 +45,9 @@ class IntegrityCheckerIT extends LedgerIntegrationTest {
         Account counterparty = data.wallet("INR");
         Account subCent = data.wallet("INR");
         Account loosenedFloor = data.wallet("INR");
+        Account closedWithMoney = data.wallet("INR");
         data.deposit(drifted, "10.00");
+        data.deposit(closedWithMoney, "2.00");
 
         try (Connection connection = privilegedDataSource().getConnection()) {
             connection.setAutoCommit(false);
@@ -68,6 +70,7 @@ class IntegrityCheckerIT extends LedgerIntegrationTest {
 
                 root.sql("UPDATE account_balances SET min_balance = -5 WHERE account_id = ?")
                         .param(loosenedFloor.id()).update();
+                root.sql("UPDATE accounts SET status = 'CLOSED' WHERE id = ?").param(closedWithMoney.id()).update();
 
                 String orphan = ids.next(Prefix.ACCOUNT);
                 root.sql("""
@@ -87,12 +90,16 @@ class IntegrityCheckerIT extends LedgerIntegrationTest {
                         new Violation(Check.SEQUENCE_GAP, gapped.publicId()),
                         new Violation(Check.BALANCE_CHAIN_BROKEN, gapped.publicId() + "#2"),
                         new Violation(Check.SCALE_VIOLATION, "journal:" + publicIdOf(root, subUnit)),
+                        new Violation(Check.SCALE_VIOLATION, "entry:" + publicIdOf(root, subUnit) + "#1"),
                         new Violation(Check.FLOOR_MISMATCH, loosenedFloor.publicId()),
-                        new Violation(Check.MISSING_BALANCE_ROW, orphan));
+                        new Violation(Check.MISSING_BALANCE_ROW, orphan),
+                        new Violation(Check.CLOSED_ACCOUNT_NONZERO, closedWithMoney.publicId()));
                 assertThat(report.violations()).extracting(Violation::check).contains(
                         Check.JOURNAL_UNBALANCED, Check.TRIAL_BALANCE, Check.MISSING_BALANCE_ROW,
                         Check.PROJECTION_DRIFT, Check.SEQUENCE_GAP, Check.BALANCE_CHAIN_BROKEN,
-                        Check.SCALE_VIOLATION, Check.FLOOR_MISMATCH);
+                        Check.SCALE_VIOLATION, Check.FLOOR_MISMATCH, Check.CLOSED_ACCOUNT_NONZERO);
+                assertThat(report.violations()).filteredOn(v -> v.check() == Check.CLOSED_ACCOUNT_NONZERO)
+                        .extracting(Violation::subject).containsExactly(closedWithMoney.publicId());
             } finally {
                 connection.rollback();
             }

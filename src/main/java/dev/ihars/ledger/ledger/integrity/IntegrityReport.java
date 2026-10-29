@@ -25,10 +25,15 @@ public record IntegrityReport(List<Violation> violations) {
         /** An entry's effective_date differs from its journal's. */
         ENTRY_EFFECTIVE_DATE_MISMATCH,
         /** An entry's posted_at differs from its journal's. */
-        ENTRY_POSTED_AT_MISMATCH
+        ENTRY_POSTED_AT_MISMATCH,
+        /** A CLOSED account has a non-zero balance. */
+        CLOSED_ACCOUNT_NONZERO
     }
 
-    /** @param subject the offending row, e.g. a journal or account public id or a currency */
+    /**
+     * @param subject the offending row by public id (e.g. a journal, {@code journal#line} or an
+     *     account) or a currency; never an internal id or an amount
+     */
     public record Violation(Check check, String subject) {}
 
     public IntegrityReport {

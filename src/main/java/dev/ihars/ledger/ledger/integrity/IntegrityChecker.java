@@ -75,8 +75,9 @@ public class IntegrityChecker {
                      WHERE x.delta <> x.signed_amount
                     """.formatted(SIGNED_AMOUNT)),
             new Query(Check.SCALE_VIOLATION, """
-                    SELECT CONCAT('entry:', e.id)
+                    SELECT CONCAT('entry:', j.public_id, '#', e.line_no)
                       FROM ledger_entries e
+                      JOIN journal_transactions j ON j.id = e.journal_id
                       JOIN currencies c ON c.code = e.currency
                      WHERE e.amount <> TRUNCATE(e.amount, c.minor_units)
                         OR e.balance_after <> TRUNCATE(e.balance_after, c.minor_units)
@@ -115,6 +116,12 @@ public class IntegrityChecker {
                       FROM ledger_entries e
                       JOIN journal_transactions j ON j.id = e.journal_id
                      WHERE e.posted_at <> j.posted_at
+                    """),
+            new Query(Check.CLOSED_ACCOUNT_NONZERO, """
+                    SELECT a.public_id
+                      FROM accounts a
+                      JOIN account_balances b ON b.account_id = a.id
+                     WHERE a.status = 'CLOSED' AND b.balance <> 0
                     """));
 
     private final JdbcClient jdbc;
