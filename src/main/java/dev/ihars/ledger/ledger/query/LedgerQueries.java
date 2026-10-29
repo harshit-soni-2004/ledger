@@ -43,6 +43,18 @@ public class LedgerQueries {
         return reader.entries(accountId, afterSeq, limit);
     }
 
+    /**
+     * Entries with {@code account_seq < beforeSeq}, newest first (keyset pagination).
+     *
+     * @param beforeSeq exclusive upper bound, or null for the newest entries
+     */
+    public List<LedgerEntryView> entriesNewestFirst(long accountId, Long beforeSeq, int limit) {
+        if ((beforeSeq != null && beforeSeq < 1) || limit < 1 || limit > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("beforeSeq must be >= 1 and limit 1-" + MAX_PAGE_SIZE);
+        }
+        return reader.entriesNewestFirst(accountId, beforeSeq == null ? Long.MAX_VALUE : beforeSeq, limit);
+    }
+
     public Optional<JournalView> journal(String publicId) {
         return reader.journal(publicId);
     }

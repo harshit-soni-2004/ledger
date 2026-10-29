@@ -23,8 +23,9 @@ import org.springframework.stereotype.Repository;
 public class JdbcLedgerReader {
 
     private static final String ENTRY_COLUMNS = """
-            j.public_id AS journal_public_id, e.line_no, e.account_id, e.currency, c.minor_units, e.direction,
-            e.amount, e.account_seq, e.balance_after, e.effective_date, e.posted_at
+            j.public_id AS journal_public_id, j.type AS journal_type, e.line_no, e.account_id,
+            a.public_id AS account_public_id, e.currency, c.minor_units, e.direction, e.amount, e.account_seq,
+            e.balance_after, e.effective_date, e.posted_at
             """;
 
     private final JdbcClient jdbc;
@@ -76,6 +77,7 @@ public class JdbcLedgerReader {
         return jdbc.sql("SELECT " + ENTRY_COLUMNS + """
                   FROM ledger_entries e
                   JOIN journal_transactions j ON j.id = e.journal_id
+                  JOIN accounts a ON a.id = e.account_id
                   JOIN currencies c ON c.code = e.currency
                  WHERE e.account_id = :accountId AND e.account_seq > :afterSeq
                  ORDER BY e.account_seq
@@ -88,10 +90,28 @@ public class JdbcLedgerReader {
                 .list();
     }
 
+    public List<LedgerEntryView> entriesNewestFirst(long accountId, long beforeSeq, int limit) {
+        return jdbc.sql("SELECT " + ENTRY_COLUMNS + """
+                  FROM ledger_entries e
+                  JOIN journal_transactions j ON j.id = e.journal_id
+                  JOIN accounts a ON a.id = e.account_id
+                  JOIN currencies c ON c.code = e.currency
+                 WHERE e.account_id = :accountId AND e.account_seq < :beforeSeq
+                 ORDER BY e.account_seq DESC
+                 LIMIT :limit
+                """)
+                .param("accountId", accountId)
+                .param("beforeSeq", beforeSeq)
+                .param("limit", limit)
+                .query((rs, n) -> entry(rs))
+                .list();
+    }
+
     public Optional<JournalView> journal(String publicId) {
         List<LedgerEntryView> entries = jdbc.sql("SELECT " + ENTRY_COLUMNS + """
                   FROM journal_transactions j
                   JOIN ledger_entries e ON e.journal_id = j.id
+                  JOIN accounts a ON a.id = e.account_id
                   JOIN currencies c ON c.code = e.currency
                  WHERE j.public_id = :publicId
                  ORDER BY e.line_no
@@ -125,7 +145,8 @@ public class JdbcLedgerReader {
 
     private static LedgerEntryView entry(ResultSet rs) throws SQLException {
         CurrencyUnit currency = currency(rs);
-        return new LedgerEntryView(rs.getString("journal_public_id"), rs.getInt("line_no"), rs.getLong("account_id"),
+        return new LedgerEntryView(rs.getString("journal_public_id"), JournalType.valueOf(rs.getString("journal_type")),
+                rs.getInt("line_no"), rs.getLong("account_id"), rs.getString("account_public_id"),
                 Direction.valueOf(rs.getString("direction")), Money.of(rs.getBigDecimal("amount"), currency),
                 rs.getLong("account_seq"), Money.of(rs.getBigDecimal("balance_after"), currency),
                 rs.getObject("effective_date", LocalDate.class),

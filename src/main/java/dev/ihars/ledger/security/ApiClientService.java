@@ -97,6 +97,11 @@ public class ApiClientService {
     }
 
     @Transactional(readOnly = true)
+    public Optional<ApiClient> findClientById(long id) {
+        return clients.findClientById(id);
+    }
+
+    @Transactional(readOnly = true)
     public List<ApiKey> keys(ApiClient client) {
         return clients.keys(client.id());
     }

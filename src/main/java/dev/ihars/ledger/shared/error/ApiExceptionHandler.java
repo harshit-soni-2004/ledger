@@ -31,7 +31,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiProblemException.class)
     public ResponseEntity<ProblemDetail> handleApiProblem(ApiProblemException ex) {
-        return Problems.response(ex.status(), ex.code(), ex.getMessage());
+        ResponseEntity<ProblemDetail> response = Problems.response(ex.status(), ex.code(), ex.getMessage());
+        if (ex.code() == ErrorCode.REQUEST_IN_PROGRESS) {
+            return ResponseEntity.status(response.getStatusCode()).header(HttpHeaders.RETRY_AFTER, "1")
+                    .body(response.getBody());
+        }
+        return response;
     }
 
     /** Lock-wait timeout or deadlock victim: the transaction rolled back and is safe to retry. */

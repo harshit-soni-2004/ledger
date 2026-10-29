@@ -94,6 +94,13 @@ public class JdbcApiClientRepository {
                 .optional();
     }
 
+    public Optional<ApiClient> findClientById(long id) {
+        return jdbc.sql("SELECT " + CLIENT_COLUMNS + " FROM api_clients c WHERE c.id = :id")
+                .param("id", id)
+                .query((rs, n) -> client(rs))
+                .optional();
+    }
+
     /** Serializes key issuance, revocation and disabling per client. */
     public Optional<ApiClient> lockClient(String publicId) {
         return jdbc.sql("SELECT " + CLIENT_COLUMNS + " FROM api_clients c WHERE c.public_id = :publicId FOR UPDATE")
