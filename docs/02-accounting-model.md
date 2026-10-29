@@ -79,6 +79,12 @@ A journal can be posted only if all of these hold (checked by `JournalDraft` bef
 6. All accounts are `ACTIVE` (checked again under lock).
 7. Accounts with a floor do not go below it after applying the journal.
 
+Every entry carries its journal's `effective_date` and `posted_at`. The entry columns are
+copies kept for indexing (balance-as-of-date and statement queries read entries alone); the
+journal header is the source of truth. `PostingEngine` writes both from the same values in
+the same transaction, and the integrity checker reports any entry whose copy differs
+(`ENTRY_EFFECTIVE_DATE_MISMATCH`, `ENTRY_POSTED_AT_MISMATCH`).
+
 ## Ledger balance vs available balance
 
 - **Ledger balance:** sum of all posted entries for the account (normal orientation).

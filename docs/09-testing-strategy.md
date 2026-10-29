@@ -70,10 +70,11 @@ Implemented in Phase 2 (the planned per-constraint classes were consolidated int
 | Test | Expected outcome |
 |---|---|
 | `PostingEngineIT` | 1 header, N entries, `account_seq` increments by 1, `balance_after` correct, balance rows updated, 1 audit event with request/correlation ids; KWD/JPY scales kept; LIMITED floor; every rejection code leaves journals, entries, audit events and balances unchanged |
-| `PostingRollbackIT` | Audit write (the last write of a posting) fails → 0 new headers/entries, balances unchanged, integrity clean; a caller's rolled-back transaction undoes a posting |
+| `PostingRollbackIT` | Audit write (the last write of a posting) fails → 0 new headers/entries/audit events, balances unchanged, integrity clean; a caller's rolled-back transaction undoes a posting |
+| `AccountOpeningRollbackIT` | Audit write (after the account and balance rows) fails during `AccountService.open` → no account with that name, account, balance-row and audit-event counts unchanged, integrity clean; the same request succeeds once the fault is removed |
 | `LedgerQueriesIT` | Balance as of date D = Σ signed entries with `effective_date ≤ D` (a backdated posting changes past dates; `balance_after` follows posting order); keyset paging; `available` = balance − floor |
 | `AccountServiceIT`, `AuditTrailIT` | Account + zero balance row + floor + `ACCOUNT_OPENED` event; invalid commands write nothing; audit append outside a transaction is refused |
-| `IntegrityCheckerIT` | Clean after a scenario; in a rolled-back root transaction, each corruption kind (drift, one-sided journal, seq gap, broken chain, sub-unit amount, floor mismatch, missing balance row, trial balance) is reported |
+| `IntegrityCheckerIT` | Clean after a scenario; in a rolled-back root transaction, each corruption kind (drift, one-sided journal, seq gap, broken chain, sub-unit amount, floor mismatch, missing balance row, trial balance) is reported; an entry whose `effective_date` or `posted_at` differs from its journal header is reported for exactly that column |
 | `ConcurrentPostingIT` | 8 threads: concurrent deposits lose nothing; random opposing transfers conserve money, never breach the floor, no deadlocks, gapless chains |
 | `RandomizedLedgerSimulationIT` | 200 seeded random postings (backdated, multi-line, three currencies) give the same accept/reject decisions, balances, sequences and entries in MySQL as in the in-memory model; integrity clean |
 

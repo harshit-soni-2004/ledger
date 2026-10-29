@@ -97,7 +97,7 @@ Implementation notes:
 
 ---
 
-## Phase 2 — Money and accounting domain (pure Java) — implemented with the internal parts of Phases 3 and 4, in review
+## Phase 2 — Money and accounting domain (pure Java) — implemented with the internal parts of Phases 3 and 4 ✅
 
 Scope decision (Phase 2 approval): Phase 2 was asked to deliver the accounting model, the
 schema migrations, accounts, journals, entries, balanced posting, balances and the tests that
@@ -120,6 +120,14 @@ Implementation notes:
   `JournalPropertiesTest` and `LedgerModelPropertiesTest` run 1,000 seeded iterations each, and
   `RandomizedLedgerSimulationIT` replays seeded random postings against MySQL and an in-memory
   reference model.
+
+Phase 2 review follow-ups (accepted, done): the integrity checker also reports entries whose
+`effective_date` or `posted_at` differs from their journal header; `AccountOpeningRollbackIT`
+proves account opening is atomic. Header-to-entry balancing and projection consistency are
+documented as application-enforced invariants with detective checks
+([03](03-database-schema.md), [05](05-invariants.md)). No post-write re-sum was added to
+`PostingEngine`. Phase numbering is unchanged: Phase 3 is merged into Phase 2, and the next
+milestone is Phase 4.
 
 - **Learn first:** double-entry bookkeeping, normal balances, ISO 4217 minor units,
   `BigDecimal` scale vs precision, `compareTo` vs `equals`, property-based testing.
@@ -163,6 +171,22 @@ account freeze/unfreeze/close (with the column-level grants they need), the inte
 API and scheduled job, and `OPENING` journals. The posting engine, account opening, queries,
 integrity checker and single-writer rule already exist.
 
+Decisions carried over from the Phase 2 review (must be settled in this phase):
+
+- **Business-date time zone (Q5).** `PostingEngine` rejects future effective dates using the
+  UTC date. With the proposed `Asia/Kolkata` default, a posting dated "today" between 00:00
+  and 05:30 IST would be rejected. Decide the zone, inject it as configuration, and use it
+  for the future-date check and as-of balances; add a test at the day boundary.
+- **Account-status locking.** Postings read `accounts.status` without a lock (only the
+  balance row is `FOR UPDATE`). Freeze/unfreeze/close must lock the account's balance row
+  (`SELECT … FOR UPDATE`) before changing the status, so a status change and a posting
+  serialize. Grant column-level `UPDATE (status, updated_at)` on `accounts` only.
+  `FrozenAccountRaceIT` (Phase 5) proves it.
+- **Overdraft authorization.** `AccountService.open` accepts any type and overdraft policy,
+  including `UNLIMITED`. The API must restrict this by role: clients open `FORBIDDEN`
+  wallets only; `LIMITED` and non-wallet types are ADMIN-only; `UNLIMITED` stays reserved
+  for system accounts.
+
 - **Learn first:** Spring transaction proxies (self-invocation trap), `SELECT … FOR UPDATE`,
   keyset pagination, API-key hashing, Problem Details mapping.
 - **Prerequisites:** Phase 3.
@@ -189,6 +213,12 @@ integrity checker and single-writer rule already exist.
   (transactional) and `RetryingTransferService` (non-transactional wrapper); rejection
   persistence; replay header; purge job; metrics (`ledger.transfer.duration`,
   `ledger.idempotency.replays`, `ledger.lock.retries`).
+- **Carried over from the Phase 2 review — deadlock retry.** `PostingEngine` has no retry;
+  a deadlock or lock-wait timeout currently surfaces as an exception and rolls back. Retry
+  belongs in the non-transactional `RetryingTransferService` around the whole transaction
+  (bounded attempts, jittered backoff, MySQL 1213/1205 only), never inside it.
+  `ConcurrentPostingIT` saw no deadlocks thanks to ascending lock order, but retry is still
+  required for lock-wait timeouts and for locks taken by other statements.
 - **Tests:** "Transfers, idempotency, concurrency" rows — including the 50-thread overspend test.
 - **Acceptance:** all concurrency tests pass 20 consecutive times locally and in CI.
 - **Risks:** retry inside the transaction; Hikari pool smaller than test threads; using a
@@ -204,6 +234,11 @@ integrity checker and single-writer rule already exist.
 - **API changes:** `POST /journal-transactions/{id}/reversals`.
 - **Tasks:** reversal service (lock original transfer row → balances), status transition
   `POSTED → REVERSED`, correlation for corrections, audit events.
+- **Carried over from the Phase 2 review — reversals.** The schema (`uk_jtx_reverses`,
+  composite `fk_jtx_reverses`, `ck_jtx_reversal_link`) and `JournalDraft.mirror()` exist, but
+  `PostingEngine` rejects `REVERSAL` drafts with `REVERSAL_NOT_SUPPORTED`. This phase removes
+  that guard behind the reversal service, which locks the original before posting; Q4
+  (reversal when the recipient already spent the funds) must be answered first.
 - **Tests:** "Reversals and audit" rows.
 - **Acceptance:** concurrent reversal test yields exactly one reversal; original rows untouched (checksum before/after).
 - **Commits:** `feat(ledger): journal reversal` → `test(ledger): reversal concurrency and audit`.

@@ -17,9 +17,9 @@ Enforcement layers legend:
 
 | # | Invariant | Enforcement | Verified by (see [09](09-testing-strategy.md)) |
 |---|---|---|---|
-| I1 | Every posted journal balances: Σ debits = Σ credits, single currency | APP (`JournalDraft`), DB-C (`ck_jtx_balanced`, composite currency FKs), TX, DET (header-vs-entries query, trial balance) | `JournalDraftTest`, `JournalPropertiesTest`, `LedgerSchemaConstraintsIT`, `IntegrityCheckerIT` |
+| I1 | Every posted journal balances: Σ debits = Σ credits, single currency; entries carry the journal's `effective_date` and `posted_at` | APP (`JournalDraft`, single writer `PostingEngine`), DB-C (`ck_jtx_balanced` on the header row only, composite currency FKs), TX, DET (header-vs-entries query, entry/header date queries, trial balance) | `JournalDraftTest`, `JournalPropertiesTest`, `LedgerSchemaConstraintsIT`, `IntegrityCheckerIT` |
 | I2 | Posted journals/entries cannot be edited or deleted | APP (insert-only repositories), DB-G (no UPDATE/DELETE grant; triggers), DB-C (`RESTRICT` FKs) | `LedgerImmutabilityIT` (triggers), `DatabasePrivilegesIT` (grants), `ArchitectureTest` (single writer) |
-| I3 | A failed posting leaves no partial entries | TX (one transaction for idempotency, journal, entries, balances, business row, audit) | `PostingRollbackIT` (fault injected mid-posting) |
+| I3 | A failed posting leaves no partial entries; a failed account opening leaves no account, balance row or audit event | TX (one transaction for idempotency, journal, entries, balances, business row, audit) | `PostingRollbackIT` (fault injected mid-posting), `AccountOpeningRollbackIT` (fault injected after the account and balance rows) |
 | I4 | Duplicate submissions cannot create duplicate financial effects | DB-C (`uk_idem_scope`, `uk_transfers_client_key`, `uk_transfers_journal`, `bank_movements` external reference unique), TX (key stored with effect) | `TransferIdempotencyIT` (sequential + 20-thread concurrent), `LostResponseRetryIT` |
 | I5 | Concurrent operations cannot violate overdraft rules | LOCK (`FOR UPDATE` on balance rows, ascending order), APP (check on locked value), DB-C (`ck_balances_floor` backstop), DB-C (`uk_entries_account_seq`) | `ConcurrentPostingIT` (Phase 2), `ConcurrentOverspendIT`, `OpposingTransfersDeadlockIT`, `LedgerSchemaConstraintsIT` |
 | I6 | Reversals preserve original history; a journal is reversed at most once | APP (mirror journal), DB-C (`uk_jtx_reverses`, `ck_jtx_reversal_link`), DB-G (immutability) | `ReversalIT`, `ConcurrentReversalIT` |
@@ -27,7 +27,7 @@ Enforcement layers legend:
 | I8 | Re-importing or re-running cannot create duplicate financial effects | DB-C (`uk_batches_file`, `uk_rows_dedup`, `uk_runs_active`, `uk_resolutions_subject`), APP (reconciliation is read-only on the ledger; adjustments only through idempotent resolutions) | `DuplicateImportIT`, `ReconciliationRerunIT` (identical results, ledger row counts unchanged) |
 | I9 | Calculations use exact decimals with correct currency precision | APP (`Money` with `BigDecimal`, `RoundingMode.UNNECESSARY`, string-only parsing; ArchUnit bans `double` constructors), DB-C (`DECIMAL(19,4)`), DET (scale-violation query) | `MoneyTest`, `MoneyPropertiesTest`, `AmountParsingApiIT`, `ArchitectureTest` |
 | I10 | Untrusted or malformed input cannot create invalid financial records | APP (Bean Validation, strict CSV parsing, unknown-field rejection), DB-C (CHECKs, ENUMs, FKs, strict SQL mode) | `TransferValidationApiIT`, `CsvParserTest`, `MalformedStatementIT`, `StrictSqlModeIT` |
-| I11 | Balance projection equals the sum of entries; `balance_after` chain and `account_seq` are gapless | TX, LOCK, DB-C (`uk_entries_account_seq`), DET (projection and chain queries) | `RandomizedLedgerSimulationIT` + `IntegrityCheckerIT` |
+| I11 | Balance projection equals the sum of entries; `balance_after` chain and `account_seq` are gapless | APP (single writer `PostingEngine`), TX, LOCK, DB-C (`uk_entries_account_seq`), DET (projection and chain queries) | `RandomizedLedgerSimulationIT` + `IntegrityCheckerIT` |
 | I12 | The global trial balance per currency is zero | Follows from I1; DET (trial-balance query; metric `ledger.integrity.violations`) | `RandomizedLedgerSimulationIT`, `LedgerModelPropertiesTest`, `IntegrityCheckerIT` |
 | I13 | Entry currency = account currency = journal currency | DB-C (composite FKs) | `LedgerSchemaConstraintsIT` |
 | I14 | Only one active reconciliation run per bank account | DB-C (`uk_runs_active`, `ck_runs_lock`) | `ConcurrentRunStartIT` |
@@ -43,6 +43,14 @@ Enforcement layers legend:
 - **Locks** make check-then-act sequences safe under concurrency.
 - **Detective controls** catch what preventive controls cannot express (cross-row sums)
   and prove correctness continuously, the way real ledgers run daily balance checks.
+
+I1 (across rows) and I11 are **application-enforced**. No database constraint ties a
+journal header to its entries or a balance row to the sum of its entries, and the runtime
+user `ledger_app` has the `INSERT`/`UPDATE` grants that posting needs. The guarantee is that
+only `PostingEngine` writes the ledger, in one transaction; the integrity checker detects a
+violation after it happens but cannot prevent it. Anyone holding the runtime database
+credentials can bypass these invariants with direct SQL, so those credentials must be
+protected like the ledger itself (see [03](03-database-schema.md#enforcing-the-journal-balances-across-rows)).
 
 ## Invariants that are explicitly *not* claimed
 

@@ -21,7 +21,11 @@ public record IntegrityReport(List<Violation> violations) {
         /** A stored amount has more decimals than its currency allows. */
         SCALE_VIOLATION,
         /** min_balance does not match the account's overdraft policy. */
-        FLOOR_MISMATCH
+        FLOOR_MISMATCH,
+        /** An entry's effective_date differs from its journal's. */
+        ENTRY_EFFECTIVE_DATE_MISMATCH,
+        /** An entry's posted_at differs from its journal's. */
+        ENTRY_POSTED_AT_MISMATCH
     }
 
     /** @param subject the offending row, e.g. a journal or account public id or a currency */

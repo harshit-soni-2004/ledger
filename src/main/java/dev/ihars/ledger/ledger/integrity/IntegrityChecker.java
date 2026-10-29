@@ -103,6 +103,18 @@ public class IntegrityChecker {
                                                      WHEN 'FORBIDDEN' THEN 0
                                                      WHEN 'LIMITED' THEN -a.overdraft_limit
                                                      ELSE NULL END)
+                    """),
+            new Query(Check.ENTRY_EFFECTIVE_DATE_MISMATCH, """
+                    SELECT CONCAT(j.public_id, '#', e.line_no)
+                      FROM ledger_entries e
+                      JOIN journal_transactions j ON j.id = e.journal_id
+                     WHERE e.effective_date <> j.effective_date
+                    """),
+            new Query(Check.ENTRY_POSTED_AT_MISMATCH, """
+                    SELECT CONCAT(j.public_id, '#', e.line_no)
+                      FROM ledger_entries e
+                      JOIN journal_transactions j ON j.id = e.journal_id
+                     WHERE e.posted_at <> j.posted_at
                     """));
 
     private final JdbcClient jdbc;

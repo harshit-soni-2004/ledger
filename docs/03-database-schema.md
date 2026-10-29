@@ -256,6 +256,27 @@ GROUP BY currency
 HAVING net <> 0;
 ```
 
+The checker also reports entries whose `effective_date` or `posted_at` differs from their
+journal header (see [02](02-accounting-model.md)), a broken `balance_after` chain, gaps in
+`account_seq`, amounts finer than the currency allows and floors that differ from the
+account's overdraft policy.
+
+**These are application-enforced invariants, not database-enforced ones.** Header-to-entry
+balancing, entry/header date agreement and the consistency of `account_balances` with the
+entries rest on layers 1, 3 and 4. The database alone does not prevent a violation: the
+runtime user `ledger_app` holds `INSERT` on `journal_transactions` and `ledger_entries` and
+`UPDATE` on the balance columns of `account_balances`, which `PostingEngine` needs. A
+client connecting directly with those credentials can write an unbalanced journal or a
+drifted balance in one statement. The integrity checker detects such a write afterwards;
+it does not prevent it. Therefore:
+
+- The runtime database credentials are a secret on the level of the ledger itself. They
+  live only in the runtime environment (never in the repository, logs or images), are not
+  shared with people or other services, and are rotated if exposed.
+- Ad hoc access for operators must use a separate read-only account (not provisioned
+  yet), never `ledger_app`.
+- The integrity check runs regularly, and any violation is treated as an incident.
+
 A stored-procedure-only posting API (app user may only `EXECUTE` a procedure that inserts
 and validates) would move layer 4 into the database. It is a valid hardening extension;
 we start with application posting for testability and readability.

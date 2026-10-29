@@ -10,6 +10,8 @@ import dev.ihars.ledger.shared.id.PublicIdGenerator.Prefix;
 import dev.ihars.ledger.support.LedgerIntegrationTest;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -87,13 +89,71 @@ class IntegrityCheckerIT extends LedgerIntegrationTest {
                         new Violation(Check.SCALE_VIOLATION, "journal:" + publicIdOf(root, subUnit)),
                         new Violation(Check.FLOOR_MISMATCH, loosenedFloor.publicId()),
                         new Violation(Check.MISSING_BALANCE_ROW, orphan));
-                assertThat(report.violations()).extracting(Violation::check).contains(Check.values());
+                assertThat(report.violations()).extracting(Violation::check).contains(
+                        Check.JOURNAL_UNBALANCED, Check.TRIAL_BALANCE, Check.MISSING_BALANCE_ROW,
+                        Check.PROJECTION_DRIFT, Check.SEQUENCE_GAP, Check.BALANCE_CHAIN_BROKEN,
+                        Check.SCALE_VIOLATION, Check.FLOOR_MISMATCH);
             } finally {
                 connection.rollback();
             }
         }
 
         assertThat(integrity.check().violations()).isEmpty();
+    }
+
+    /**
+     * Entries carry their journal's effective date and posting time (docs/02-accounting-model.md);
+     * the copies exist only for indexing. An entry whose copy differs is reported, and only for
+     * the column that differs.
+     */
+    @Test
+    void entryDatesThatDifferFromTheirJournalAreDetected() throws SQLException {
+        Account payee = data.wallet("INR");
+        Account payer = data.wallet("INR");
+        LocalDate effective = data.today().minusDays(3);
+        LocalDateTime postedAt = LocalDateTime.of(2026, 10, 1, 9, 30, 15, 123_456_000);
+
+        try (Connection connection = privilegedDataSource().getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                JdbcClient root = JdbcClient.create(new SingleConnectionDataSource(connection, true));
+                String publicId = ids.next(Prefix.JOURNAL);
+                root.sql("""
+                        INSERT INTO journal_transactions (public_id, type, currency, total_debit, total_credit,
+                                effective_date, posted_at, posted_by)
+                        VALUES (?, 'TRANSFER', 'INR', 5.00, 5.00, ?, ?, 'test')
+                        """).param(publicId).param(effective).param(postedAt).update();
+                long journalId = root.sql("SELECT id FROM journal_transactions WHERE public_id = ?")
+                        .param(publicId).query(Long.class).single();
+                datedEntry(root, journalId, 1, payee, "CREDIT", "5.00", effective.minusDays(1), postedAt);
+                datedEntry(root, journalId, 2, payer, "DEBIT", "-5.00", effective, postedAt.plusNanos(1_000));
+
+                IntegrityReport report = new IntegrityChecker(root).check();
+
+                assertThat(report.violations())
+                        .contains(new Violation(Check.ENTRY_EFFECTIVE_DATE_MISMATCH, publicId + "#1"),
+                                new Violation(Check.ENTRY_POSTED_AT_MISMATCH, publicId + "#2"))
+                        .doesNotContain(new Violation(Check.ENTRY_EFFECTIVE_DATE_MISMATCH, publicId + "#2"),
+                                new Violation(Check.ENTRY_POSTED_AT_MISMATCH, publicId + "#1"),
+                                new Violation(Check.JOURNAL_UNBALANCED, publicId));
+            } finally {
+                connection.rollback();
+            }
+        }
+
+        assertThat(integrity.check().violations()).isEmpty();
+    }
+
+    private static void datedEntry(JdbcClient root, long journalId, int lineNo, Account account, String direction,
+            String balanceAfter, LocalDate effectiveDate, LocalDateTime postedAt) {
+        root.sql("""
+                INSERT INTO ledger_entries (journal_id, line_no, account_id, currency, direction, amount, account_seq,
+                        balance_after, effective_date, posted_at)
+                VALUES (?, ?, ?, 'INR', ?, 5.00, 1, ?, ?, ?)
+                """)
+                .param(journalId).param(lineNo).param(account.id()).param(direction).param(balanceAfter)
+                .param(effectiveDate).param(postedAt)
+                .update();
     }
 
     private long journal(JdbcClient root, String total) {
