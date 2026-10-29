@@ -28,6 +28,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
+    @ExceptionHandler(ApiProblemException.class)
+    public ResponseEntity<ProblemDetail> handleApiProblem(ApiProblemException ex) {
+        return Problems.response(ex.status(), ex.code(), ex.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleUnexpected(Exception ex, WebRequest request) {
         log.error("Unhandled exception while processing request", ex);

@@ -13,7 +13,10 @@ public class PublicIdGenerator {
 
     public enum Prefix {
         ACCOUNT("acct"),
-        JOURNAL("jtx");
+        JOURNAL("jtx"),
+        CLIENT("cli"),
+        API_KEY("key"),
+        INTEGRITY_CHECK("ichk");
 
         private final String value;
 

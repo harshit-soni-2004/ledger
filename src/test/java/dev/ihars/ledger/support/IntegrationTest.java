@@ -1,6 +1,9 @@
 package dev.ihars.ledger.support;
 
 import com.mysql.cj.jdbc.Driver;
+import dev.ihars.ledger.audit.Actor;
+import dev.ihars.ledger.security.ApiClientService;
+import dev.ihars.ledger.security.ApiRole;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -8,8 +11,11 @@ import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -42,6 +48,9 @@ public abstract class IntegrationTest {
     protected static final String APP_USER = "ledger_app";
     private static final String MIGRATION_PASSWORD = "test-migrator-password";
     private static final String APP_PASSWORD = "test-app-password";
+    /** Registered as the bootstrap ADMIN key in every test context. Test-only value. */
+    protected static final String ADMIN_KEY = "lk_TestOnlyBootstrapAdminKey000000000000000000";
+    private static final Map<ApiRole, String> SHARED_KEYS = new ConcurrentHashMap<>();
 
     private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4"))
             .withDatabaseName(DATABASE)
@@ -69,6 +78,51 @@ public abstract class IntegrationTest {
     @Value("${local.server.port}")
     private int port;
 
+    @Autowired
+    private ApiClientService apiClients;
+
+    /** A key of the given role, created once per test JVM and shared by all tests. */
+    protected String keyFor(ApiRole role) {
+        if (role == ApiRole.ADMIN) {
+            return ADMIN_KEY;
+        }
+        return SHARED_KEYS.computeIfAbsent(role, r -> newClient(r).token());
+    }
+
+    /** A fresh client with its own key, for tests about ownership or revocation. */
+    protected TestClient newClient(ApiRole role) {
+        ApiClientService.CreatedClient created = apiClients.createClient("Test " + role, role,
+                Actor.system("integration-test"), null);
+        return new TestClient(created.client().publicId(), created.key().key().publicId(), created.key().token());
+    }
+
+    public record TestClient(String id, String keyId, String token) {}
+
+    /** Any method, optional bearer token and JSON body; extra headers as name/value pairs. */
+    protected HttpResponse<String> call(String method, String path, String token, String json, String... headers) {
+        HttpRequest.Builder request = HttpRequest.newBuilder(uri(path))
+                .method(method, json == null ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofString(json));
+        if (json != null) {
+            request.header("Content-Type", "application/json");
+        }
+        if (token != null) {
+            request.header("Authorization", "Bearer " + token);
+        }
+        if (headers.length > 0) {
+            request.headers(headers);
+        }
+        return send(request.build());
+    }
+
+    protected HttpResponse<String> getAs(String token, String path, String... headers) {
+        return call("GET", path, token, null, headers);
+    }
+
+    protected HttpResponse<String> postAs(String token, String path, String json, String... headers) {
+        return call("POST", path, token, json, headers);
+    }
+
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
         registry.add("LEDGER_DB_URL", IntegrationTest::jdbcUrl);
@@ -76,6 +130,7 @@ public abstract class IntegrationTest {
         registry.add("LEDGER_DB_APP_PASSWORD", () -> APP_PASSWORD);
         registry.add("LEDGER_DB_MIGRATION_USER", () -> MIGRATION_USER);
         registry.add("LEDGER_DB_MIGRATION_PASSWORD", () -> MIGRATION_PASSWORD);
+        registry.add("LEDGER_BOOTSTRAP_ADMIN_KEY", () -> ADMIN_KEY);
     }
 
     private static String jdbcUrl() {

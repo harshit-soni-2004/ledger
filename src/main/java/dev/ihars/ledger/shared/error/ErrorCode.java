@@ -11,12 +11,35 @@ import org.springframework.http.HttpStatusCode;
 public enum ErrorCode {
     VALIDATION_FAILED,
     BAD_REQUEST,
+    UNAUTHENTICATED,
+    FORBIDDEN,
     NOT_FOUND,
     METHOD_NOT_ALLOWED,
     NOT_ACCEPTABLE,
     PAYLOAD_TOO_LARGE,
     UNSUPPORTED_MEDIA_TYPE,
-    INTERNAL_ERROR;
+    INTERNAL_ERROR,
+
+    AMOUNT_PRECISION_EXCEEDED,
+    IDEMPOTENCY_KEY_MISSING,
+    IDEMPOTENCY_KEY_INVALID,
+    IDEMPOTENCY_KEY_REUSED,
+    REQUEST_IN_PROGRESS,
+
+    UNSUPPORTED_CURRENCY,
+    ACCOUNT_NOT_FOUND,
+    ACCOUNT_NOT_ACTIVE,
+    ACCOUNT_STATUS_CONFLICT,
+    ACCOUNT_BALANCE_NOT_ZERO,
+    INSUFFICIENT_FUNDS,
+    CURRENCY_MISMATCH,
+    EFFECTIVE_DATE_IN_FUTURE,
+    OPENING_NOT_ALLOWED,
+    JOURNAL_REJECTED,
+
+    CLIENT_DISABLED,
+    TOO_MANY_ACTIVE_KEYS,
+    INTEGRITY_CHECK_IN_PROGRESS;
 
     private static final String TYPE_BASE = "https://ledger.local/problems/";
 
@@ -26,6 +49,8 @@ public enum ErrorCode {
 
     static ErrorCode fromStatus(HttpStatusCode status) {
         return switch (status.value()) {
+            case 401 -> UNAUTHENTICATED;
+            case 403 -> FORBIDDEN;
             case 404 -> NOT_FOUND;
             case 405 -> METHOD_NOT_ALLOWED;
             case 406 -> NOT_ACCEPTABLE;

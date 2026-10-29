@@ -24,7 +24,7 @@ class ProblemDetailsIT extends IntegrationTest {
 
     @Test
     void unknownRouteReturnsNotFoundProblem() {
-        HttpResponse<String> response = get("/api/v1/does-not-exist");
+        HttpResponse<String> response = getAs(ADMIN_KEY, "/does-not-exist");
 
         assertThat(response.statusCode()).isEqualTo(404);
         assertProblem(response, "NOT_FOUND", "https://ledger.local/problems/not-found");
@@ -32,7 +32,7 @@ class ProblemDetailsIT extends IntegrationTest {
 
     @Test
     void wrongMethodReturnsMethodNotAllowedProblem() {
-        HttpResponse<String> response = get("/test/problems/validated");
+        HttpResponse<String> response = getAs(ADMIN_KEY, "/test/problems/validated");
 
         assertThat(response.statusCode()).isEqualTo(405);
         assertProblem(response, "METHOD_NOT_ALLOWED", "https://ledger.local/problems/method-not-allowed");
@@ -40,7 +40,7 @@ class ProblemDetailsIT extends IntegrationTest {
 
     @Test
     void beanValidationFailureListsFieldErrors() {
-        HttpResponse<String> response = postJson("/test/problems/validated", "{\"name\": \"\"}");
+        HttpResponse<String> response = postAs(ADMIN_KEY, "/test/problems/validated", "{\"name\": \"\"}");
 
         assertThat(response.statusCode()).isEqualTo(400);
         JsonNode body = assertProblem(response, "VALIDATION_FAILED", "https://ledger.local/problems/validation-failed");
@@ -49,7 +49,7 @@ class ProblemDetailsIT extends IntegrationTest {
 
     @Test
     void malformedJsonReturnsBadRequestProblem() {
-        HttpResponse<String> response = postJson("/test/problems/validated", "{not json");
+        HttpResponse<String> response = postAs(ADMIN_KEY, "/test/problems/validated", "{not json");
 
         assertThat(response.statusCode()).isEqualTo(400);
         assertProblem(response, "BAD_REQUEST", "https://ledger.local/problems/bad-request");
@@ -57,15 +57,32 @@ class ProblemDetailsIT extends IntegrationTest {
 
     @Test
     void unsupportedContentTypeReturnsUnsupportedMediaTypeProblem() {
-        HttpResponse<String> response = post("/test/problems/validated", "text/plain", "name=x");
+        HttpResponse<String> response = call("POST", "/test/problems/validated", ADMIN_KEY, null,
+                "Content-Type", "text/plain");
 
         assertThat(response.statusCode()).isEqualTo(415);
         assertProblem(response, "UNSUPPORTED_MEDIA_TYPE", "https://ledger.local/problems/unsupported-media-type");
     }
 
     @Test
-    void unexpectedErrorsHideInternalDetails() {
+    void unknownJsonFieldsAreRejected() {
+        HttpResponse<String> response = postAs(ADMIN_KEY, "/test/problems/validated", "{\"name\": \"a\", \"nmae\": \"b\"}");
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertProblem(response, "BAD_REQUEST", "https://ledger.local/problems/bad-request");
+    }
+
+    @Test
+    void unauthenticatedRequestsGetAProblemFromTheSecurityLayer() {
         HttpResponse<String> response = get("/test/problems/explode");
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertProblem(response, "UNAUTHENTICATED", "https://ledger.local/problems/unauthenticated");
+    }
+
+    @Test
+    void unexpectedErrorsHideInternalDetails() {
+        HttpResponse<String> response = getAs(ADMIN_KEY, "/test/problems/explode");
 
         assertThat(response.statusCode()).isEqualTo(500);
         JsonNode body = assertProblem(response, "INTERNAL_ERROR", "https://ledger.local/problems/internal-error");

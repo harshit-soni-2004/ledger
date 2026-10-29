@@ -31,10 +31,17 @@ spring:
       "[app_user]": ${LEDGER_DB_APP_USER}
   lifecycle:
     timeout-per-shutdown-phase: 20s
+  jackson:
+    deserialization:
+      # Typos in request bodies are errors, not silently ignored fields (docs/04).
+      fail-on-unknown-properties: true
 
 ledger:
   # Business-date zone for effective and as-of dates (docs/14 Q5).
   business-zone: ${LEDGER_REPORTING_ZONE:Asia/Kolkata}
+  security:
+    # Local/demo only: registers this token as the first ADMIN key. Leave unset in production.
+    bootstrap-admin-key: ${LEDGER_BOOTSTRAP_ADMIN_KEY:}
 
 server:
   port: ${LEDGER_HTTP_PORT:8080}
