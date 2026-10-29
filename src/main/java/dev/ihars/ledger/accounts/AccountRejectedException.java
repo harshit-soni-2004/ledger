@@ -7,7 +7,12 @@ public class AccountRejectedException extends RuntimeException {
         INVALID_NAME,
         INVALID_TYPE,
         UNSUPPORTED_CURRENCY,
-        INVALID_OVERDRAFT
+        INVALID_OVERDRAFT,
+        ACCOUNT_NOT_FOUND,
+        SYSTEM_ACCOUNT,
+        STATUS_CONFLICT,
+        BALANCE_NOT_ZERO,
+        REASON_REQUIRED
     }
 
     private final Code code;

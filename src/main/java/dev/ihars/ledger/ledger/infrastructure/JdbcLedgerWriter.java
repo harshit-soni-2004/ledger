@@ -29,15 +29,22 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JdbcLedgerWriter {
 
+    // normal_balance and currency are immutable, so the non-locking read of accounts and
+    // currencies in this statement cannot be stale.
     private static final String LOCK_BALANCE = """
             SELECT b.account_id, b.currency, c.minor_units, b.balance, b.min_balance, b.last_entry_seq,
-                   a.normal_balance, a.status
+                   a.normal_balance
               FROM account_balances b
               JOIN accounts a ON a.id = b.account_id
               JOIN currencies c ON c.code = b.currency
              WHERE b.account_id = :accountId
                FOR UPDATE OF b
             """;
+
+    // Status is mutable. Lifecycle changes update it only while holding the balance-row lock, and
+    // a locking read always returns the latest committed version, so reading it here, after the
+    // balance lock is granted, cannot miss a freeze or close that committed while we waited.
+    private static final String READ_STATUS_LOCKED = "SELECT status FROM accounts WHERE id = :accountId FOR SHARE";
 
     private final JdbcClient jdbc;
 
@@ -53,22 +60,50 @@ public class JdbcLedgerWriter {
     public Map<Long, AccountSnapshot> lockAccounts(SortedSet<Long> accountIds) {
         Map<Long, AccountSnapshot> snapshots = new LinkedHashMap<>();
         for (long accountId : accountIds) {
-            Optional<AccountSnapshot> snapshot = jdbc.sql(LOCK_BALANCE)
-                    .param("accountId", accountId)
-                    .query((rs, n) -> {
-                        CurrencyUnit currency = new CurrencyUnit(rs.getString("currency"), rs.getInt("minor_units"));
-                        BigDecimal minBalance = rs.getBigDecimal("min_balance");
-                        return new AccountSnapshot(rs.getLong("account_id"), currency,
-                                Direction.valueOf(rs.getString("normal_balance")),
-                                AccountStatus.valueOf(rs.getString("status")),
-                                Money.of(rs.getBigDecimal("balance"), currency),
-                                minBalance == null ? null : Money.of(minBalance, currency),
-                                rs.getLong("last_entry_seq"));
-                    })
-                    .optional();
-            snapshot.ifPresent(s -> snapshots.put(accountId, s));
+            lockAccount(accountId).ifPresent(s -> snapshots.put(accountId, s));
         }
         return snapshots;
+    }
+
+    /** Locks one balance row and returns the account state as read under the lock. */
+    public Optional<AccountSnapshot> lockAccount(long accountId) {
+        return jdbc.sql(LOCK_BALANCE)
+                .param("accountId", accountId)
+                .query((rs, n) -> new LockedBalance(rs.getLong("account_id"),
+                        new CurrencyUnit(rs.getString("currency"), rs.getInt("minor_units")),
+                        Direction.valueOf(rs.getString("normal_balance")), rs.getBigDecimal("balance"),
+                        rs.getBigDecimal("min_balance"), rs.getLong("last_entry_seq")))
+                .optional()
+                .map(locked -> {
+                    AccountStatus status = AccountStatus.valueOf(jdbc.sql(READ_STATUS_LOCKED)
+                            .param("accountId", accountId).query(String.class).single());
+                    return locked.toSnapshot(status);
+                });
+    }
+
+    /**
+     * Changes the status of an account whose balance row the caller has locked.
+     *
+     * @return false if the status was no longer {@code expected}
+     */
+    public boolean updateStatus(long accountId, AccountStatus expected, AccountStatus target, Instant now) {
+        return jdbc.sql("""
+                UPDATE accounts SET status = :target, updated_at = :now
+                 WHERE id = :accountId AND status = :expected AND system_code IS NULL
+                """)
+                .param("target", target.name())
+                .param("now", utc(now))
+                .param("accountId", accountId)
+                .param("expected", expected.name())
+                .update() == 1;
+    }
+
+    private record LockedBalance(long accountId, CurrencyUnit currency, Direction normalBalance, BigDecimal balance,
+            BigDecimal minBalance, long lastEntrySeq) {
+        AccountSnapshot toSnapshot(AccountStatus status) {
+            return new AccountSnapshot(accountId, currency, normalBalance, status, Money.of(balance, currency),
+                    minBalance == null ? null : Money.of(minBalance, currency), lastEntrySeq);
+        }
     }
 
     /** Inserts the journal header and returns its generated id. */

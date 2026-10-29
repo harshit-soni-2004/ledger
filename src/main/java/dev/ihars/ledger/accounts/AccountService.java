@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -53,6 +54,16 @@ public class AccountService {
      */
     @Transactional
     public Account open(OpenAccountCommand command, Actor actor, String requestId) {
+        return open(command, null, actor, requestId);
+    }
+
+    /**
+     * Opens an account owned by an API client.
+     *
+     * @param ownerClientId internal id of the owning client, or null for an unowned account
+     */
+    @Transactional
+    public Account open(OpenAccountCommand command, Long ownerClientId, Actor actor, String requestId) {
         AuditEvent.requireTraceId("requestId", requestId);
         String name = validName(command.name());
         if (command.type() == null) {
@@ -65,7 +76,7 @@ public class AccountService {
 
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         Account account = accounts.insert(ids.next(PublicIdGenerator.Prefix.ACCOUNT), name, command.type(),
-                currency, policy, now);
+                currency, policy, ownerClientId, now);
         ledger.register(account.id(), currency, policy.minBalance(currency).orElse(null), now);
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -87,6 +98,17 @@ public class AccountService {
     @Transactional(readOnly = true)
     public Optional<Account> findById(long id) {
         return accounts.findById(id);
+    }
+
+    /**
+     * Accounts in creation order, at most {@code limit}.
+     *
+     * @param ownerClientId restrict to this owner, or null for all accounts
+     * @param after the last account of the previous page, or null for the first page
+     */
+    @Transactional(readOnly = true)
+    public List<Account> page(Long ownerClientId, Account after, int limit) {
+        return accounts.page(ownerClientId, after == null ? null : after.id(), limit);
     }
 
     /** A system account seeded by migration, e.g. {@code ("LIABILITY.SUSPENSE", "INR")}. */

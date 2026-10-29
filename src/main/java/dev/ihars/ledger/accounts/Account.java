@@ -12,7 +12,13 @@ import java.time.Instant;
  *
  * @param id internal id; never exposed outside the service
  * @param systemCode set only for system accounts, e.g. {@code LIABILITY.SUSPENSE}
+ * @param ownerClientId internal id of the owning API client, or null for unowned accounts
  */
-public record Account(long id, String publicId, String systemCode, String name, AccountType type,
-        Direction normalBalance, CurrencyUnit currency, OverdraftPolicy overdraftPolicy, AccountStatus status,
-        Instant createdAt) {}
+public record Account(long id, String publicId, String systemCode, Long ownerClientId, String name,
+        AccountType type, Direction normalBalance, CurrencyUnit currency, OverdraftPolicy overdraftPolicy,
+        AccountStatus status, Instant createdAt) {
+
+    public boolean isSystem() {
+        return systemCode != null;
+    }
+}
