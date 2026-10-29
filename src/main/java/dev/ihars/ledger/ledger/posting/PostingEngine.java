@@ -20,6 +20,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.springframework.stereotype.Service;
@@ -63,12 +64,47 @@ public class PostingEngine {
             throw new JournalRejectedException(JournalRejectedException.Code.REVERSAL_NOT_SUPPORTED,
                     "Reversals are not available yet");
         }
+        if (draft.type() == JournalType.OPENING) {
+            throw new JournalRejectedException(JournalRejectedException.Code.OPENING_NOT_ALLOWED,
+                    "Opening journals are posted with postOpening");
+        }
+        SortedSet<Long> accountIds = accountIds(draft);
+        return post(draft, writer.lockAccounts(accountIds), context);
+    }
+
+    /**
+     * Posts an opening balance. Every non-system account in the journal must have no entries
+     * yet, checked under the balance locks, so an opening can only ever be the first entry of a
+     * customer account. System accounts (bank, equity, suspense) may already have history.
+     *
+     * @throws JournalRejectedException with {@code OPENING_NOT_ALLOWED} if an account has entries
+     */
+    @Transactional
+    public PostedJournal postOpening(JournalDraft draft, PostingContext context) {
+        if (draft.type() != JournalType.OPENING) {
+            throw new IllegalArgumentException("Not an opening journal: " + draft.type());
+        }
+        SortedSet<Long> accountIds = accountIds(draft);
+        Map<Long, AccountSnapshot> locked = writer.lockAccounts(accountIds);
+        Set<Long> system = writer.systemAccountIds(accountIds);
+        for (AccountSnapshot account : locked.values()) {
+            if (!system.contains(account.accountId()) && account.lastEntrySeq() != 0) {
+                throw new JournalRejectedException(JournalRejectedException.Code.OPENING_NOT_ALLOWED,
+                        "Account %d already has entries".formatted(account.accountId()));
+            }
+        }
+        return post(draft, locked, context);
+    }
+
+    private static SortedSet<Long> accountIds(JournalDraft draft) {
         SortedSet<Long> accountIds = new TreeSet<>();
         for (JournalLine line : draft.lines()) {
             accountIds.add(line.accountId());
         }
-        Map<Long, AccountSnapshot> locked = writer.lockAccounts(accountIds);
+        return accountIds;
+    }
 
+    private PostedJournal post(JournalDraft draft, Map<Long, AccountSnapshot> locked, PostingContext context) {
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         PostingPlan plan = PostingCalculator.plan(draft, locked, calendar.dateOf(now));
 

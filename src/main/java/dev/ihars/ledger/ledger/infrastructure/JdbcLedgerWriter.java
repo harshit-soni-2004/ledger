@@ -12,10 +12,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedSet;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -79,6 +81,17 @@ public class JdbcLedgerWriter {
                             .param("accountId", accountId).query(String.class).single());
                     return locked.toSnapshot(status);
                 });
+    }
+
+    /** The system accounts among the given ids. {@code system_code} is immutable, so no lock is needed. */
+    public Set<Long> systemAccountIds(Collection<Long> accountIds) {
+        if (accountIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(jdbc.sql("SELECT id FROM accounts WHERE id IN (:ids) AND system_code IS NOT NULL")
+                .param("ids", List.copyOf(accountIds))
+                .query(Long.class)
+                .list());
     }
 
     /**

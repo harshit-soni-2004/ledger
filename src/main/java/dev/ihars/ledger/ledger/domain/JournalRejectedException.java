@@ -17,7 +17,8 @@ public class JournalRejectedException extends RuntimeException {
         EFFECTIVE_DATE_IN_FUTURE,
         ACCOUNT_NOT_FOUND,
         ACCOUNT_NOT_ACTIVE,
-        INSUFFICIENT_FUNDS
+        INSUFFICIENT_FUNDS,
+        OPENING_NOT_ALLOWED
     }
 
     private final Code code;

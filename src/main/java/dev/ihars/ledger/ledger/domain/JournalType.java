@@ -8,8 +8,11 @@ public enum JournalType {
     ADJUSTMENT,
     OPENING;
 
-    /** Reversals and adjustments must explain themselves (ADR-0008). */
+    /**
+     * Reversals and adjustments must explain themselves (ADR-0008; also a database CHECK).
+     * Openings too, enforced by the application only.
+     */
     public boolean requiresReason() {
-        return this == REVERSAL || this == ADJUSTMENT;
+        return this == REVERSAL || this == ADJUSTMENT || this == OPENING;
     }
 }

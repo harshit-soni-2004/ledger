@@ -33,7 +33,8 @@ public final class RandomJournals {
         List<Long> creditParts = split(random, totalMinor, creditAccounts.size());
 
         JournalType type = JournalType.values()[random.nextInt(JournalType.values().length)];
-        if (type == JournalType.REVERSAL) {
+        // Reversals are built with mirror; openings need fresh accounts (PostingEngine.postOpening).
+        if (type == JournalType.REVERSAL || type == JournalType.OPENING) {
             type = JournalType.TRANSFER;
         }
         JournalDraft.Builder builder = JournalDraft.builder(type, currency, effectiveDate);

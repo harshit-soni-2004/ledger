@@ -37,10 +37,11 @@ class NormalBalanceTest {
     }
 
     @Test
-    void onlyReversalsAndAdjustmentsRequireAReason() {
+    void onlyReversalsAdjustmentsAndOpeningsRequireAReason() {
         for (JournalType type : JournalType.values()) {
             assertThat(type.requiresReason()).as(type.name())
-                    .isEqualTo(type == JournalType.REVERSAL || type == JournalType.ADJUSTMENT);
+                    .isEqualTo(type == JournalType.REVERSAL || type == JournalType.ADJUSTMENT
+                            || type == JournalType.OPENING);
         }
     }
 }
