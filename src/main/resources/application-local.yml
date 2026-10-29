@@ -1,0 +1,6 @@
+# Developer profile: enable with SPRING_PROFILES_ACTIVE=local.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

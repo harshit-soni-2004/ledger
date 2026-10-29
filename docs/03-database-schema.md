@@ -68,10 +68,12 @@ erDiagram
 ## Core ledger DDL
 
 ```sql
+-- Implemented in Phase 1 (V1__create_currencies.sql); seeded EUR 2, INR 2, JPY 0, KWD 3, USD 2.
 CREATE TABLE currencies (
-  code        CHAR(3)  CHARACTER SET ascii NOT NULL PRIMARY KEY,
+  code        CHAR(3)  CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
   minor_units TINYINT  NOT NULL,
   active      BOOLEAN  NOT NULL DEFAULT TRUE,
+  CONSTRAINT ck_currencies_code CHECK (code REGEXP '^[A-Z]{3}$'),
   CONSTRAINT ck_currencies_minor_units CHECK (minor_units BETWEEN 0 AND 4)
 );
 

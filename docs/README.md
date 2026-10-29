@@ -1,6 +1,6 @@
 # Ledger and Reconciliation Platform — Planning Documentation
 
-Status: **Phase 0 (planning) complete — awaiting approval to start Phase 1.**
+Status: **Phase 1 (walking skeleton) implemented — awaiting review before Phase 2.**
 Last updated: 2026-10-29.
 
 These documents are the blueprint for a portfolio-grade double-entry ledger and bank
@@ -33,7 +33,7 @@ pull request as the code.
 | ADR | Title | Status |
 |---|---|---|
 | [0001](adr/0001-modular-monolith.md) | Modular monolith | Accepted |
-| [0002](adr/0002-technology-stack-and-versions.md) | Technology stack and Spring Boot version | Accepted (re-verify at Phase 1) |
+| [0002](adr/0002-technology-stack-and-versions.md) | Technology stack and Spring Boot version | Accepted (verified in Phase 1) |
 | [0003](adr/0003-jdbc-for-persistence.md) | Spring JDBC (`JdbcClient`) instead of JPA | Accepted |
 | [0004](adr/0004-money-representation.md) | `BigDecimal` + `DECIMAL(19,4)` with explicit currency | Accepted |
 | [0005](adr/0005-locking-and-isolation.md) | READ COMMITTED + ordered pessimistic row locks | Accepted |

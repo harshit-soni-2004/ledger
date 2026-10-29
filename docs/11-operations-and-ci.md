@@ -18,7 +18,7 @@ Optional later: `docker compose --profile app up` (app container) and
 
 | Service | Image | Notes |
 |---|---|---|
-| `mysql` | `mysql:8.4` | Port 3306 bound to localhost only; named volume; `--log-bin-trust-function-creators=1`; healthcheck `mysqladmin ping`; init script `docker/mysql/init/01-users.sql` |
+| `mysql` | `mysql:8.4` | Port 3306 bound to localhost only; named volume; `--log-bin-trust-function-creators=1`; healthcheck `mysqladmin ping` (no credentials); init script `docker/mysql/init/01-users.sh`; host port overridable with `LEDGER_DB_HOST_PORT` |
 | `app` (profile `app`) | built from `Dockerfile` | Waits for `mysql` healthy; env from `.env`; non-root user |
 | `prometheus`, `grafana` (profile `observability`) | official images | Phase 11, optional |
 
@@ -40,7 +40,11 @@ Rules: `.env` is git-ignored; `.env.example` holds placeholders only; no secrets
 - The init script (runs once on an empty volume) creates the database, `ledger_migrator`
   (DDL) and `ledger_app` (DML per [03](03-database-schema.md#grants-local-and-ci)).
 - Grants for tables created by later migrations are applied by a repeatable Flyway
-  migration (`R__grants.sql`) executed as the migrator, so grants never drift from schema.
+  migration (`R__runtime_grants.sql`) executed as the migrator, so grants never drift from
+  schema. The init script is `docker/mysql/init/01-users.sh` (shell, so credentials come
+  from environment variables); Testcontainers mounts the same file.
+- The application also reads `.env` directly via `spring.config.import`, so
+  `./mvnw spring-boot:run` works without exporting variables.
 - Flyway naming: `V<n>__<snake_case_description>.sql`; migrations are never edited after
   merge — fixes are new migrations. `flyway validate` runs on startup and in CI.
 

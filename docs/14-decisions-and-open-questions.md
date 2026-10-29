@@ -21,16 +21,17 @@
 
 | # | Question | Proposed default | Impact if changed later | Needed by |
 |---|---|---|---|---|
-| Q1 | Base package / Maven `groupId` | `dev.ihars.ledger` | Package rename (cheap early, costly later) | **Phase 1** |
+| Q1 | ~~Base package / Maven `groupId`~~ **Decided:** `dev.ihars.ledger` | — | — | Phase 1 |
 | Q2 | Authentication approach | API keys with roles ([ADR-0009](adr/0009-authentication.md)) | Security filter rewrite | Phase 4 |
 | Q3 | Replay business rejections (e.g. `INSUFFICIENT_FUNDS`) for the same idempotency key? (A5) | Yes — one key = one attempt | Idempotency semantics and tests | Phase 5 |
 | Q4 | Reversals when recipient already spent funds (A6) | Reject with `INSUFFICIENT_FUNDS`; no override in MVP | Need an audited overdraft-policy-change workflow | Phase 6 |
 | Q5 | Business-date time zone | `Asia/Kolkata` (configurable) | Date boundaries in matching and as-of balances | Phase 4 |
-| Q6 | Supported currencies seed | INR, USD, EUR, JPY, KWD (JPY/KWD to exercise 0 and 3 decimals) | Seed migration | Phase 1 |
+| Q6 | ~~Supported currencies seed~~ **Decided:** INR, USD, EUR, JPY, KWD | — | — | Phase 1 |
 | Q7 | Store raw statement files in MySQL (`LONGBLOB`) or on disk | MySQL (≤ 10 MB) for transactional simplicity | Storage adapter | Phase 8 |
 | Q8 | Default reconciliation date tolerance | 2 days | Category distribution | Phase 9 |
 | Q9 | Payout model for MVP | Direct to Cash at Bank; clearing lifecycle as extension | Posting patterns, reconciliation of payouts | Phase 7 |
-| Q10 | Public repository on GitHub from Phase 1? | Yes, with CI on GitHub Actions | CI host | Phase 1 |
+| Q10 | ~~Public repository~~ **Decided:** local Git + GitHub Actions workflow committed; no remote created or pushed without explicit approval | — | — | Phase 1 |
+| Q12 | Property-test tooling. jqwik was removed in the Phase 1 review: it was unused, is built on JUnit Platform 1.x, and carries the maintainer's anti-AI-agent usage terms (ADR-0002) | Seeded randomized JUnit 6 tests that log their seed | Property-test tooling | Phase 2 (confirm) |
 | Q11 | License | MIT | — | Phase 11 |
 
 ## Known risks

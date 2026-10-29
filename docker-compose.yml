@@ -1,0 +1,32 @@
+name: ledger
+
+services:
+  mysql:
+    image: mysql:8.4
+    command:
+      # Lets the migration user create triggers while binary logging is on (Phase 3 immutability triggers).
+      - --log-bin-trust-function-creators=1
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ledger
+      LEDGER_DB_MIGRATION_USER: ${LEDGER_DB_MIGRATION_USER:?set LEDGER_DB_MIGRATION_USER in .env}
+      LEDGER_DB_MIGRATION_PASSWORD: ${LEDGER_DB_MIGRATION_PASSWORD:?set LEDGER_DB_MIGRATION_PASSWORD in .env}
+      LEDGER_DB_APP_USER: ${LEDGER_DB_APP_USER:?set LEDGER_DB_APP_USER in .env}
+      LEDGER_DB_APP_PASSWORD: ${LEDGER_DB_APP_PASSWORD:?set LEDGER_DB_APP_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${LEDGER_DB_HOST_PORT:-3306}:3306"
+    volumes:
+      - ledger-mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # TCP ping only succeeds once the final server is up (init runs with networking disabled).
+      # mysqladmin ping exits 0 whenever the server answers, even with "access denied", so no
+      # credentials are needed.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  ledger-mysql-data:

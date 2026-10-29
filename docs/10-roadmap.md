@@ -40,7 +40,19 @@ flowchart LR
 
 ---
 
-## Phase 1 — Project scaffolding, local infrastructure, CI (walking skeleton)
+## Phase 1 — Project scaffolding, local infrastructure, CI (walking skeleton) — implemented, in review
+
+Implementation notes:
+
+- Runtime grants live in `src/main/resources/db/migration/R__runtime_grants.sql`, applied by
+  the migration user (granted `WITH GRANT OPTION`). The app user receives no privileges in the
+  Docker init script.
+- The Docker init script is `docker/mysql/init/01-users.sh`, a shell script rather than SQL,
+  because user names and passwords come from environment variables. Testcontainers mounts the
+  same script.
+- Strict SQL mode is pinned per application session (`connection-init-sql`) and also asserted
+  for the server default.
+- Commit `chore: initialize repository with planning docs` is done. Code commits wait for review.
 
 - **Learn first:** Spring Boot 4 project structure and modular starters; Flyway versioned
   migrations; Testcontainers + `@ServiceConnection`; twelve-factor config; MySQL users and grants.
@@ -51,7 +63,7 @@ flowchart LR
 - **Tasks (in order):**
   1. `git init`; `.gitignore` (target, IDE files, `.env`); commit the existing `docs/`.
   2. Verify versions per [ADR-0002](adr/0002-technology-stack-and-versions.md) gate (Initializr, `dependency:tree`).
-  3. Maven project with wrapper; Java 21; Boot 4.1.x; dependencies: webmvc, validation, jdbc, flyway (+ `flyway-mysql`), actuator, mysql-connector-j, springdoc, test, testcontainers-mysql, archunit, jqwik.
+  3. Maven project with wrapper; Java 21; Boot 4.1.x; dependencies: webmvc, validation, jdbc, flyway (+ `flyway-mysql`), actuator, mysql-connector-j, springdoc, test, testcontainers-mysql, archunit. (jqwik was planned here and removed in the Phase 1 review; see ADR-0002.)
   4. Surefire (`*Test`) and Failsafe (`*IT`) configuration; JaCoCo report.
   5. `docker-compose.yml`: `mysql:8.4` with healthcheck, `log_bin_trust_function_creators=1`, init script, named volume; `app` service (profile `app`) built later.
   6. `.env.example` with placeholder credentials; `application.yml` reading env vars; separate Flyway and runtime datasource credentials.

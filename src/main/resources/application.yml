@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: ledger
+  config:
+    # Local convenience: KEY=VALUE pairs from a git-ignored .env file. Real environment
+    # variables take precedence.
+    import: optional:file:.env[.properties]
+  datasource:
+    # Runtime connection: least-privilege application user (docs/03-database-schema.md#grants-local-and-ci).
+    url: ${LEDGER_DB_URL:jdbc:mysql://localhost:3306/ledger?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true}
+    username: ${LEDGER_DB_APP_USER}
+    password: ${LEDGER_DB_APP_PASSWORD}
+    hikari:
+      pool-name: ledger-app
+      maximum-pool-size: 20
+      connection-timeout: 3000
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+      # Pin strict SQL mode per session so correctness never depends on server defaults.
+      connection-init-sql: >-
+        SET SESSION sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+  flyway:
+    # Migrations run as the DDL-capable migration user, never as the runtime user.
+    user: ${LEDGER_DB_MIGRATION_USER}
+    password: ${LEDGER_DB_MIGRATION_PASSWORD}
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    clean-disabled: true
+    placeholders:
+      "[app_user]": ${LEDGER_DB_APP_USER}
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${LEDGER_HTTP_PORT:8080}
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db
+
+logging:
+  structured:
+    format:
+      console: ecs
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

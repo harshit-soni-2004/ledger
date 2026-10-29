@@ -17,7 +17,7 @@
 | Layer | Naming | Runner | Infrastructure | Scope |
 |---|---|---|---|---|
 | Unit | `*Test` | Surefire | None | Domain (`Money`, `JournalDraft`, matching passes, CSV parsing), mappers |
-| Property | `*PropertiesTest` | Surefire (jqwik engine) | None | Accounting invariants over random operation sequences |
+| Property | `*PropertiesTest` | Surefire (JUnit 6, seeded random inputs; [ADR-0002](adr/0002-technology-stack-and-versions.md#property-based-testing-jqwik-removed-phase-1-review)) | None | Accounting invariants over random operation sequences |
 | Integration | `*IT` | Failsafe | Testcontainers MySQL 8.4 (reused per run), full Spring context | Repositories, transactions, locking, constraints, API |
 | Architecture | `ArchitectureTest` | Surefire | None | ArchUnit module and coding rules |
 | Performance | k6 scripts | Manual / scheduled | Docker Compose | Latency and throughput hypotheses (Phase 11) |
