@@ -45,7 +45,7 @@ public class IdempotencyService {
 
     public static final String KEY_HEADER = "Idempotency-Key";
     public static final String REPLAYED_HEADER = "Idempotent-Replayed";
-    public static final Duration RETENTION = Duration.ofHours(24);
+    public static final Duration RETENTION = Duration.ofDays(30);
     private static final Pattern KEY = Pattern.compile("[A-Za-z0-9_-]{1,128}");
 
     private final JdbcIdempotencyRepository records;

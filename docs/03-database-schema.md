@@ -10,7 +10,7 @@ snippets below, the migrations win:
 
 - Public IDs are `VARCHAR(32) ascii_bin` with a `REGEXP` check on the prefix and Crockford
   ULID. `CHAR(30)` was too short: `acct_` + 26 characters is 31.
-- `accounts.owner_client_id` and `api_clients` are deferred to Phase 4 (authentication).
+- `accounts.owner_client_id` and `api_clients` were deferred to Phase 4 (done; see below).
 - `fk_jtx_reverses` is composite, `(reverses_journal_id, currency)`, so a reversal is in the
   same currency as the journal it reverses.
 - `ck_jtx_reason` uses `reason IS NOT NULL AND …`: a `CHECK` that evaluates to `NULL` passes.
@@ -18,6 +18,22 @@ snippets below, the migrations win:
   (`0`, `-limit`, or `NULL` for none); `ck_balances_floor` enforces `balance >= min_balance`.
 - Runtime grants are the Phase 2 subset in the "Grants" section, including a column-level
   `UPDATE` on `account_balances`.
+
+**Implemented in Phase 4** (`V6`–`V8`):
+
+- `api_clients` (`cli_…`, `role` CLIENT/OPERATOR/ADMIN, `status` ACTIVE/DISABLED) and a
+  separate `api_keys` table (`key_…`, SHA-256 `key_hash BINARY(32)` unique, display
+  `key_prefix`, `status` ACTIVE/REVOKED, `ck_api_keys_revoked`: `revoked_at` set exactly when
+  REVOKED). Keys are separate rows so a client can rotate (at most two active keys, an
+  application rule).
+- `accounts.owner_client_id` (FK to `api_clients`, index `(owner_client_id, id)`), plus
+  `ck_accounts_system_unowned` and `ck_accounts_system_active`: system accounts are never
+  owned and always ACTIVE (database-enforced).
+- `idempotency_records` as below, with `resource_id VARCHAR(32)` and CHECKs on the operation
+  name, key format and status range.
+- `integrity_check_runs` (`ichk_…`, trigger, actor, timestamps, `violation_count`,
+  `violations JSON`), append-only through `trg_icr_no_update` / `trg_icr_no_delete` and an
+  `INSERT`-only grant.
 
 ## Conventions
 
@@ -527,9 +543,24 @@ GRANT SELECT, INSERT ON ledger_entries TO '${app_user}'@'%';
 GRANT SELECT, INSERT ON audit_events TO '${app_user}'@'%';
 ```
 
+Phase 4 adds, also asserted by `DatabasePrivilegesIT`:
+
+```sql
+GRANT UPDATE (status, updated_at) ON accounts TO '${app_user}'@'%';
+GRANT SELECT, INSERT ON api_clients TO '${app_user}'@'%';
+GRANT UPDATE (status, updated_at) ON api_clients TO '${app_user}'@'%';
+GRANT SELECT, INSERT ON api_keys TO '${app_user}'@'%';
+GRANT UPDATE (status, revoked_at) ON api_keys TO '${app_user}'@'%';
+GRANT SELECT, INSERT ON idempotency_records TO '${app_user}'@'%';
+GRANT UPDATE (response_status, response_body, resource_id) ON idempotency_records TO '${app_user}'@'%';
+GRANT SELECT, INSERT ON integrity_check_runs TO '${app_user}'@'%';
+```
+
+No `DELETE` anywhere: the idempotency purge job (and its `DELETE` grant) is deferred, and
+`name` on `accounts` stays immutable for now.
+
 The column-level `UPDATE` is enough for `SELECT … FOR UPDATE` on `account_balances`
-(asserted by `DatabasePrivilegesIT`). `accounts` gets column-level `UPDATE (status, name,
-updated_at)` when the account lifecycle lands. Planned target for later phases:
+(asserted by `DatabasePrivilegesIT`). Planned target for later phases:
 
 ```sql
 -- Migration user: owns DDL (used only by Flyway)
@@ -554,12 +585,18 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ledger.idempotency_records TO 'ledger_ap
 | Operation | Transaction boundary | Locks (in order) |
 |---|---|---|
 | Create account | Insert account + balance row + audit | None beyond inserted rows |
-| Freeze/close account | Update account status + audit | Balance row `FOR UPDATE` |
+| Freeze/unfreeze/close account (Phase 4) | Idempotency + guarded status update (`WHERE status = expected`) + audit | Idempotency key → balance row `FOR UPDATE` → account row (update) |
+| Opening journal (Phase 4) | Idempotency + post + audit; non-system accounts must have `last_entry_seq = 0` under the lock | Idempotency key → balance rows ascending, each followed by `SELECT status … FOR SHARE` on its account |
 | Transfer / deposit / payout | Idempotency + post + business row + audit | Idempotency unique key → balance rows ascending |
 | Reversal | Idempotency + reversal journal + transfer status + audit | Idempotency key → original transfer row `FOR UPDATE` → balance rows ascending |
 | Statement import | Txn 1: file + batch (`RECEIVED`). Txn per chunk of ~1,000 rows. Final txn: counters + terminal status | Batch row `FOR UPDATE` per chunk (single worker per batch) |
 | Reconciliation run | Txn 1: insert run with `active_lock`. Compute in memory. Txn 2: insert all items + summary + `COMPLETED` | Unique `active_lock` prevents concurrent runs |
 | Resolution | Idempotency + resolution + optional adjustment journal + audit | Idempotency key → (adjustment) balance rows ascending |
+
+Account status is read in the posting path with a separate locking read (`FOR SHARE`) after
+the balance-row lock is granted, not as part of the balance-lock join: a non-locking read in
+the same statement could return the status from before a freeze that committed while the
+posting waited. Lifecycle changes update the status only while holding the balance-row lock.
 
 Isolation: READ COMMITTED for all application transactions
 ([ADR-0005](adr/0005-locking-and-isolation.md)). Deadlock and retry handling:

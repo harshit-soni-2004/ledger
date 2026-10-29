@@ -43,8 +43,22 @@ Backstop: even if the application check had a bug, `ck_balances_floor` rejects t
 1. `INSERT` into `idempotency_records` (unique-index record lock on the key).
 2. Business row being changed, if any (e.g. original transfer during reversal) `FOR UPDATE`.
 3. `account_balances` rows for all involved accounts, **ascending internal `account_id`**,
-   one `SELECT … FOR UPDATE` per account.
+   one `SELECT … FOR UPDATE` per account, each immediately followed by
+   `SELECT status FROM accounts … FOR SHARE` for that account (Phase 4).
 4. Inserts (journal, entries, transfer, audit) and balance updates.
+
+Account lifecycle changes (freeze, unfreeze, close) follow the same order: idempotency key,
+then the account's balance row `FOR UPDATE`, then a guarded `UPDATE accounts SET status …
+WHERE status = <expected>`. Because both sides take the balance-row lock first, a posting
+and a status change on one account serialize, and neither takes the account row before the
+balance row, so they cannot deadlock with each other. The status read is a separate locking
+read because a non-locking read joined into the balance-lock statement would use a snapshot
+taken before the lock wait and could miss a freeze that committed meanwhile
+(`AccountLifecycleIT` covers both orders).
+
+Phase 4 has no retry wrapper yet: a lock-wait timeout or deadlock anywhere outside the
+idempotency insert rolls the request back and returns `503 RESOURCE_BUSY` with
+`Retry-After: 1`; the client retries with the same key.
 
 ### Classic deadlock this prevents
 

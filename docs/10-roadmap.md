@@ -163,7 +163,35 @@ is kept below for reference.
 
 ---
 
-## Phase 4 — Posting engine, accounts API, balances, audit, authentication
+## Phase 4 — Posting engine, accounts API, balances, audit, authentication ✅
+
+Implemented in local commits `0cd8794` through `a839cee` plus the docs commit, one tested
+milestone each:
+business dates in `Asia/Kolkata`; V6–V8 schema and grants; API-key authentication and client
+management; transactional idempotency (pulled forward from Phase 5); account lifecycle under
+the posting lock; the accounts API; journal lookup and ADMIN opening journals; recorded
+integrity checks with the nightly job; role-matrix and end-to-end tests.
+
+Decisions taken (D1–D8 from the Phase 4 plan):
+
+- Idempotency is in Phase 4 for account creation, lifecycle changes and openings
+  ([ADR-0006](adr/0006-idempotency-in-posting-transaction.md) implementation notes).
+- Opening policy, role matrix and ownership as in [ADR-0009](adr/0009-authentication.md);
+  the `UNLIMITED` restriction is an API-layer policy, `AccountService` stays permissive.
+- Freeze is OPERATOR or ADMIN; unfreeze and close are ADMIN only; a reason is required.
+- `OPENING` journals: ADMIN only, reason required (application-enforced), every non-system
+  account must have no entries (checked under the lock), backdating allowed, future dates
+  rejected.
+- Entries are listed newest first, `limit` ≤ 200, opaque cursor, no entry ids.
+- System accounts are unowned and ACTIVE (database CHECKs); new integrity check
+  `CLOSED_ACCOUNT_NONZERO`.
+
+Still open after Phase 4 (deliberately): the idempotency purge job and its `DELETE` grant;
+a lock-retry wrapper (Phase 5); the integrity-check in-progress guard is per instance, not
+cluster-wide; entry filters (`from`, `to`, `direction`, `journalType`) on the entries
+endpoint; transfers, reversals, deposits and payouts.
+
+Original plan, kept for reference:
 
 After the Phase 2 merge, what remains here is: `api_clients` and `accounts.owner_client_id`,
 API-key authentication and roles, the REST endpoints below over the existing services,

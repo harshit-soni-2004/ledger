@@ -29,8 +29,10 @@ Optional later: `docker compose --profile app up` (app container) and
 | `LEDGER_DB_URL` | JDBC URL incl. `connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true` |
 | `LEDGER_DB_APP_USER` / `LEDGER_DB_APP_PASSWORD` | Runtime (least privilege) |
 | `LEDGER_DB_MIGRATION_USER` / `LEDGER_DB_MIGRATION_PASSWORD` | Flyway only |
-| `LEDGER_BOOTSTRAP_ADMIN_KEY` | Seeds an ADMIN API key hash on first start (local/demo only) |
+| `LEDGER_BOOTSTRAP_ADMIN_KEY` | Seeds an ADMIN API key hash on first start when no active ADMIN exists (local/demo only; `lk_` + 43 base62 characters) |
 | `LEDGER_REPORTING_ZONE` | Business-date time zone (default `Asia/Kolkata`) |
+| `LEDGER_INTEGRITY_SCHEDULE_ENABLED` | Nightly integrity check on/off (default `true`; tests set `false`) |
+| `LEDGER_INTEGRITY_CRON` | Spring cron for the nightly check, in the business zone (default `0 30 2 * * *`) |
 
 Rules: `.env` is git-ignored; `.env.example` holds placeholders only; no secrets in
 `application.yml`; secrets never logged; Gitleaks in CI.

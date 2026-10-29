@@ -25,15 +25,21 @@ domain operations (deposit, payout, transfer, reversal, ADMIN adjustment via res
 
 | Method | Path | Roles | Idempotent key | Purpose |
 |---|---|---|---|---|
-| POST | `/accounts` | CLIENT, OPERATOR | required | Create wallet (CLIENT) or system/bank-cash account (OPERATOR) |
+| POST | `/accounts` | CLIENT, OPERATOR, ADMIN | required | Open an account; who may open what is in [ADR-0009](adr/0009-authentication.md) (no `UNLIMITED` via the API) |
+| GET | `/accounts` | CLIENT (own), OPERATOR, ADMIN | — | Keyset list in creation order; `ownerClientId` filter for OPERATOR/ADMIN |
 | GET | `/accounts/{accountId}` | owner, OPERATOR, ADMIN | — | Account details |
-| GET | `/accounts/{accountId}/balance` | owner, OPERATOR, ADMIN | — | Ledger and available balance; `?asOf=YYYY-MM-DD` |
-| GET | `/accounts/{accountId}/entries` | owner, OPERATOR, ADMIN | — | Paginated entries; filters `from`, `to`, `direction`, `journalType` |
-| POST | `/accounts/{accountId}/freeze` · `/unfreeze` · `/close` | OPERATOR, ADMIN | required | Lifecycle changes with reason |
+| GET | `/accounts/{accountId}/balance` | owner, OPERATOR, ADMIN | — | Ledger and available balance; `?asOf=YYYY-MM-DD` (business date) recomputes from entries |
+| GET | `/accounts/{accountId}/entries` | owner, OPERATOR, ADMIN | — | Entries newest first, keyset paginated. Filters `from`, `to`, `direction`, `journalType` not implemented yet |
+| POST | `/accounts/{accountId}/freeze` | OPERATOR, ADMIN | required | `{ "reason": … }`; ACTIVE → FROZEN |
+| POST | `/accounts/{accountId}/unfreeze` · `/close` | ADMIN | required | FROZEN → ACTIVE; ACTIVE/FROZEN → CLOSED (zero balance only, terminal) |
 | POST | `/transfers` | CLIENT (owns source) | required | Same-currency transfer |
 | GET | `/transfers/{transferId}` | owner, OPERATOR, ADMIN | — | Transfer status |
 | GET | `/transfers?clientReference=…&status=…&from=…&to=…` | owner | — | Lookup after unknown outcome; history |
 | GET | `/journal-transactions/{journalId}` | OPERATOR, ADMIN | — | Header, entries, reversal links |
+| POST | `/journal-transactions/openings` | ADMIN | required | Opening balances: reason required; every non-system account must have no entries; backdating allowed, no future dates |
+| POST | `/api-clients` | ADMIN | not replayable | Create a client and its first key (token shown once, `Cache-Control: no-store`) |
+| GET | `/api-clients/{clientId}` | ADMIN | — | Client and key metadata, never tokens |
+| POST | `/api-clients/{clientId}/keys` · `/keys/{keyId}/revoke` · `/disable` | ADMIN | not replayable | Rotate (max two active keys), revoke, disable |
 | POST | `/journal-transactions/{journalId}/reversals` | ADMIN | required | Full reversal with reason |
 | POST | `/deposits` | OPERATOR | required | Simulated incoming bank funds credited to a wallet |
 | POST | `/payouts` | OPERATOR | required | Simulated outgoing bank funds debited from a wallet |
@@ -48,8 +54,8 @@ domain operations (deposit, payout, transfer, reversal, ADMIN adjustment via res
 | POST | `/reconciliation-items/{itemId}/resolutions` | OPERATOR (ADMIN for `POST_ADJUSTMENT`) | required | Resolve a discrepancy |
 | GET | `/ops/discrepancies?status=OPEN&olderThanDays=7` | OPERATOR | — | Unresolved discrepancies across bank accounts |
 | GET | `/ops/import-failures?since=…` | OPERATOR | — | Rejected batches and batches with invalid rows |
-| POST | `/ops/integrity-checks` | ADMIN | — | Run integrity checks now |
-| GET | `/ops/integrity-checks/latest` | ADMIN | — | Last result |
+| POST | `/ops/integrity-checks` | ADMIN | — | Run integrity checks now; recorded append-only; `409 INTEGRITY_CHECK_IN_PROGRESS` if one is running |
+| GET | `/ops/integrity-checks/latest` | ADMIN | — | Last result (manual or nightly) |
 | GET | `/actuator/health/{liveness,readiness}` | public | — | Probes |
 | GET | `/actuator/prometheus` | internal network only | — | Metrics |
 
@@ -110,6 +116,9 @@ GET /api/v1/accounts/acct_01JBF3…/balance
 ```http
 GET /api/v1/accounts/acct_01JBF3…/entries?limit=2
 ```
+
+As implemented in Phase 4, entries have no `entryId` (the per-account `sequence` identifies
+them), and `limit` defaults to 50.
 
 ```json
 { "data": [
