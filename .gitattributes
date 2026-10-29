@@ -1,0 +1,14 @@
+* text=auto
+
+# Scripts executed inside Linux containers / CI must keep LF endings
+*.sh   text eol=lf
+mvnw   text eol=lf
+*.sql  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# Windows scripts
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+*.jar  binary

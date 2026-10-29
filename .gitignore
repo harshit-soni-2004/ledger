@@ -1,0 +1,23 @@
+# Build output
+target/
+
+# Local environment (secrets) — only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
