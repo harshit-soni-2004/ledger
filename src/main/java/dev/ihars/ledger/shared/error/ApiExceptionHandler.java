@@ -7,6 +7,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -31,6 +32,16 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ApiProblemException.class)
     public ResponseEntity<ProblemDetail> handleApiProblem(ApiProblemException ex) {
         return Problems.response(ex.status(), ex.code(), ex.getMessage());
+    }
+
+    /** Lock-wait timeout or deadlock victim: the transaction rolled back and is safe to retry. */
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleLockFailure(PessimisticLockingFailureException ex) {
+        log.warn("Request rolled back after a lock conflict: {}", ex.getClass().getSimpleName());
+        ResponseEntity<ProblemDetail> response = Problems.response(HttpStatus.SERVICE_UNAVAILABLE,
+                ErrorCode.RESOURCE_BUSY, "The resource is busy; retry the request shortly.");
+        return ResponseEntity.status(response.getStatusCode()).header(HttpHeaders.RETRY_AFTER, "1")
+                .body(response.getBody());
     }
 
     @ExceptionHandler(Exception.class)
