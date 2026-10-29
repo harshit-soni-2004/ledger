@@ -2,6 +2,7 @@ package dev.ihars.ledger.architecture;
 
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.simpleNameEndingWith;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noFields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
@@ -51,6 +52,21 @@ class ArchitectureTest {
             .should().dependOnClassesThat().resideInAPackage(ROOT + ".ledger.infrastructure..")
             .allowEmptyShould(true)
             .because("only the ledger module may touch ledger tables; others use its public API");
+
+    @ArchTest
+    static final ArchRule onlyThePostingEngineWritesTheLedger = noClasses()
+            .that().resideOutsideOfPackages(ROOT + ".ledger.posting..", ROOT + ".ledger.infrastructure..")
+            .should().dependOnClassesThat(
+                    resideInAPackage(ROOT + ".ledger.infrastructure..").and(simpleNameEndingWith("Writer")))
+            .because("journals, entries and balances have a single writer (ADR-0005, ADR-0008)");
+
+    @ArchTest
+    static final ArchRule moneyIsFrameworkFree = noClasses()
+            .that().resideInAPackage(ROOT + ".shared.money..")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage("org.springframework..", "java.sql..", "javax.sql..", "tools.jackson..",
+                    "com.fasterxml..")
+            .because("Money is a value type shared by every layer, including the framework-free domain");
 
     @ArchTest
     static final ArchRule modulesAreFreeOfCycles = slices()

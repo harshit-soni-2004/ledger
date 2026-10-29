@@ -22,9 +22,14 @@
 | Architecture | `ArchitectureTest` | Surefire | None | ArchUnit module and coding rules |
 | Performance | k6 scripts | Manual / scheduled | Docker Compose | Latency and throughput hypotheses (Phase 11) |
 
-Shared MySQL container: one per test JVM with `@ServiceConnection`; each test class
-cleans data with a privileged *test-only* connection (`TRUNCATE` in FK-safe order), since
-the runtime user cannot delete ledger rows by design.
+Shared MySQL container: one per test JVM. Ledger tables are append-only, so tests never
+clean up: every test opens its own accounts (`LedgerTestData`) and asserts only on them, on
+deltas, or on whole-ledger invariants (`IntegrityChecker`). Probes that must write invalid or
+corrupt rows run as root in a transaction that is rolled back (`LedgerSchemaConstraintsIT`,
+`IntegrityCheckerIT`), so nothing leaks into the shared database. System accounts are shared,
+so no test asserts their absolute balance. (The original plan of `TRUNCATE` between classes
+was dropped: it would need `DROP` privileges on a test connection and bypasses the triggers
+under test.)
 
 ## Test catalogue
 
@@ -49,24 +54,28 @@ the runtime user cannot delete ledger rows by design.
 
 | Test | Expected outcome |
 |---|---|
-| `FlywayMigrationIT` | Empty DB migrates to latest; `flyway validate` passes; re-run is a no-op |
+Implemented in Phase 2 (the planned per-constraint classes were consolidated into
+`LedgerSchemaConstraintsIT`):
+
+| Test | Expected outcome |
+|---|---|
+| `FlywayMigrationIT` | V1–V5 + grants applied as the migrator; `validate` passes; re-run is a no-op; 25 system accounts with balance rows; append-only triggers exist |
 | `StrictSqlModeIT` | `@@sql_mode` contains `STRICT_TRANS_TABLES`; inserting `'abc'` into a DECIMAL fails |
-| `LedgerImmutabilityIT.triggerBlocksUpdate` | Privileged `UPDATE ledger_entries` → SQLSTATE `45000` |
-| `LedgerImmutabilityIT.runtimeUserCannotUpdate` | App user `UPDATE`/`DELETE` → access denied (1142) |
-| `JournalHeaderConstraintIT` | Inserting header with `total_debit ≠ total_credit` → CHECK violation (3819) |
-| `CurrencyConsistencyConstraintIT` | Entry with currency ≠ account currency → FK violation |
-| `BalanceFloorConstraintIT` | Direct `UPDATE account_balances SET balance = -1` on floor-0 account → CHECK violation |
-| `ReversalUniquenessConstraintIT` | Two reversal headers for the same journal → unique violation |
+| `DatabasePrivilegesIT` | Exact `SHOW GRANTS` for the app user; `UPDATE`/`DELETE`/`TRUNCATE` on append-only tables → 1142; `UPDATE` of non-projection balance columns → 1143; `FOR UPDATE` works with the column-level grant |
+| `LedgerImmutabilityIT` | Root `UPDATE`/`DELETE` on journals, entries, audit events → error 1644 (SQLSTATE `45000`); deleting an account with entries → 1451 |
+| `LedgerSchemaConstraintsIT` | Unbalanced/zero header → 3819; reversal link and reason rules → 3819 (including a `NULL` reason); cross-currency reversal → 1452; second reversal → 1062; entry currency ≠ journal or account → 1452; non-positive amount/seq/line → 3819; duplicate seq or line → 1062; balance below floor → 3819; normal-balance and overdraft consistency → 3819; malformed public ids → 3819 |
 
 ### Ledger posting (integration)
 
 | Test | Expected outcome |
 |---|---|
-| `PostingEngineIT.postsBalancedJournal` | 1 header, N entries, `account_seq` increments by 1, `balance_after` correct, balance rows updated, 1 audit event |
-| `PostingRollbackIT` | Fault injector throws after first entry insert → 0 headers, 0 entries, balances unchanged, 0 audit events, 0 idempotency rows |
-| `BalanceQueryIT.asOfDate` | Balance as of each historical date equals `balance_after` of last entry on/before that date |
-| `IntegrityCheckerIT.clean` | After a scripted scenario: zero violations |
-| `IntegrityCheckerIT.detectsDrift` | Privileged connection alters a balance row → checker reports exactly that account; metric incremented |
+| `PostingEngineIT` | 1 header, N entries, `account_seq` increments by 1, `balance_after` correct, balance rows updated, 1 audit event with request/correlation ids; KWD/JPY scales kept; LIMITED floor; every rejection code leaves journals, entries, audit events and balances unchanged |
+| `PostingRollbackIT` | Audit write (the last write of a posting) fails → 0 new headers/entries, balances unchanged, integrity clean; a caller's rolled-back transaction undoes a posting |
+| `LedgerQueriesIT` | Balance as of date D = Σ signed entries with `effective_date ≤ D` (a backdated posting changes past dates; `balance_after` follows posting order); keyset paging; `available` = balance − floor |
+| `AccountServiceIT`, `AuditTrailIT` | Account + zero balance row + floor + `ACCOUNT_OPENED` event; invalid commands write nothing; audit append outside a transaction is refused |
+| `IntegrityCheckerIT` | Clean after a scenario; in a rolled-back root transaction, each corruption kind (drift, one-sided journal, seq gap, broken chain, sub-unit amount, floor mismatch, missing balance row, trial balance) is reported |
+| `ConcurrentPostingIT` | 8 threads: concurrent deposits lose nothing; random opposing transfers conserve money, never breach the floor, no deadlocks, gapless chains |
+| `RandomizedLedgerSimulationIT` | 200 seeded random postings (backdated, multi-line, three currencies) give the same accept/reject decisions, balances, sequences and entries in MySQL as in the in-memory model; integrity clean |
 
 ### Transfers, idempotency, concurrency (integration)
 

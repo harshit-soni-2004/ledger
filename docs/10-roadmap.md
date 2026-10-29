@@ -40,7 +40,9 @@ flowchart LR
 
 ---
 
-## Phase 1 — Project scaffolding, local infrastructure, CI (walking skeleton) — implemented, in review
+## Phase 1 — Project scaffolding, local infrastructure, CI (walking skeleton) ✅
+
+Reviewed and committed as `feat: add phase 1 application foundation`.
 
 Implementation notes:
 
@@ -95,7 +97,29 @@ Implementation notes:
 
 ---
 
-## Phase 2 — Money and accounting domain (pure Java)
+## Phase 2 — Money and accounting domain (pure Java) — implemented with the internal parts of Phases 3 and 4, in review
+
+Scope decision (Phase 2 approval): Phase 2 was asked to deliver the accounting model, the
+schema migrations, accounts, journals, entries, balanced posting, balances and the tests that
+prove the invariants. That spans the original Phases 2, 3 and the internal half of 4, so they
+were merged:
+
+| Delivered in Phase 2 | Still in a later phase |
+|---|---|
+| Phase 2 as planned: `Money`, `CurrencyUnit`, `JournalDraft`, `mirror()`, seeded randomized tests | — |
+| Phase 3: `accounts`, `account_balances`, `journal_transactions`, `ledger_entries`, `audit_events`, immutability triggers, runtime grants, system-account seed, constraint/immutability tests | `api_clients` and `accounts.owner_client_id` → Phase 4 (with authentication) |
+| Phase 4 internals: `PostingEngine` (ordered locking, seq, `balance_after`, audit event), `AccountService.open`, `LedgerQueries` (balance, as-of balance, entries, journal), `IntegrityChecker`, single-writer ArchUnit rule, rollback test | All REST endpoints, authentication, account freeze/close, `POST/GET /ops/integrity-checks` and its scheduled job, `OPENING` journals via the API |
+| — | Transfers, idempotency, reversal service, reconciliation (unchanged) |
+
+Implementation notes:
+
+- `PostingEngine` rejects `REVERSAL` drafts (`REVERSAL_NOT_SUPPORTED`): the schema and
+  `JournalDraft.mirror()` support reversals, but the reversal service (locking the original,
+  status transition) is Phase 6.
+- Property tests are seeded JUnit tests (Q12, ADR-0002); `MoneyPropertiesTest`,
+  `JournalPropertiesTest` and `LedgerModelPropertiesTest` run 1,000 seeded iterations each, and
+  `RandomizedLedgerSimulationIT` replays seeded random postings against MySQL and an in-memory
+  reference model.
 
 - **Learn first:** double-entry bookkeeping, normal balances, ISO 4217 minor units,
   `BigDecimal` scale vs precision, `compareTo` vs `equals`, property-based testing.
@@ -112,7 +136,11 @@ Implementation notes:
 
 ---
 
-## Phase 3 — Core ledger schema and immutability
+## Phase 3 — Core ledger schema and immutability — merged into Phase 2
+
+Delivered in Phase 2 except `api_clients` / `owner_client_id`, which move to Phase 4. Grants
+live in `R__runtime_grants.sql`, not in the init script (Phase 1 decision). The original plan
+is kept below for reference.
 
 - **Learn first:** InnoDB clustered indexes, composite foreign keys, CHECK constraint
   limits, triggers and `SIGNAL`, least-privilege grants.
@@ -128,6 +156,12 @@ Implementation notes:
 ---
 
 ## Phase 4 — Posting engine, accounts API, balances, audit, authentication
+
+After the Phase 2 merge, what remains here is: `api_clients` and `accounts.owner_client_id`,
+API-key authentication and roles, the REST endpoints below over the existing services,
+account freeze/unfreeze/close (with the column-level grants they need), the integrity-check
+API and scheduled job, and `OPENING` journals. The posting engine, account opening, queries,
+integrity checker and single-writer rule already exist.
 
 - **Learn first:** Spring transaction proxies (self-invocation trap), `SELECT … FOR UPDATE`,
   keyset pagination, API-key hashing, Problem Details mapping.

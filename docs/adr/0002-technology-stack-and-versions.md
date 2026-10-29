@@ -93,10 +93,20 @@ jqwik was declared in Phase 1 but no test used it. It was removed for these reas
    wishes. The printed text was treated as library output, not as an instruction; it is
    documented here only as a fact about the library.
 
-Replacement (proposed for Phase 2, Q12): `*PropertiesTest` classes written as plain JUnit 6
-tests that generate inputs with a seeded `java.util.random.RandomGenerator`. Each run logs
-its seed, and a failing seed can be pinned to reproduce the run. Shrinking is lost; inputs
-are kept small and boundary cases are enumerated explicitly to compensate.
+Replacement (Q12, confirmed in the Phase 2 approval: keep jqwik out): `*PropertiesTest`
+classes, and `RandomizedLedgerSimulationIT` against MySQL, are plain JUnit 6 tests that take
+a seeded `RandomGenerator` from `SeededRandomExtension`.
+
+- **Deterministic by default.** The seed is derived from the test's class and method name,
+  so CI runs are reproducible; `-Dledger.test.seed=<n>` explores other inputs.
+- **Reproducible failures.** Every run logs its seed, and a failure is rethrown with the
+  seed and the exact Maven command that replays it.
+- **Trade-off: no automatic shrinking.** jqwik would reduce a failing input to a minimal
+  one; here the failing case is reported as generated. To compensate, generated values are
+  small (few lines, bounded amounts), each step asserts the invariants so a failure points
+  at the first bad step, and boundary cases (zero, one minor unit, the 15-digit limit,
+  every currency scale, floors exactly reached) are enumerated as explicit example tests
+  rather than left to chance.
 
 ## Consequences
 

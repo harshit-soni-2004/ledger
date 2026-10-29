@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
 import dev.ihars.ledger.architecture.archfixture.domain.SpringAwareDomainObject;
+import dev.ihars.ledger.ledger.infrastructure.JdbcLedgerWriter;
 import dev.ihars.ledger.ledger.infrastructure.archfixture.LedgerTableGateway;
 import dev.ihars.ledger.shared.archfixture.SharedReachingIntoFeature;
+import dev.ihars.ledger.shared.money.archfixture.SpringAwareMoney;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -38,6 +40,16 @@ class ArchitectureRulesTest {
     @Test
     void ledgerInfrastructureIsNotReachableFromOtherModules() {
         assertViolated(ArchitectureTest.ledgerInfrastructureIsPrivate, ReachesIntoLedgerTables.class);
+    }
+
+    @Test
+    void onlyThePostingEngineMayUseTheLedgerWriter() {
+        assertViolated(ArchitectureTest.onlyThePostingEngineWritesTheLedger, WritesLedgerDirectly.class);
+    }
+
+    @Test
+    void moneyMustNotDependOnFrameworks() {
+        assertViolated(ArchitectureTest.moneyIsFrameworkFree, SpringAwareMoney.class);
     }
 
     @Test
@@ -80,6 +92,12 @@ class ArchitectureRulesTest {
 
     static class ReachesIntoLedgerTables {
         Object gateway = new LedgerTableGateway();
+    }
+
+    static class WritesLedgerDirectly {
+        void write(JdbcLedgerWriter writer) {
+            writer.lockAccounts(new java.util.TreeSet<>());
+        }
     }
 
     static class DoubleConstructorMoney {

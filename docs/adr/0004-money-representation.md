@@ -15,7 +15,9 @@ JSON numbers parsed as doubles) cannot represent most decimal fractions exactly.
    - The canonical constructor normalizes the amount with
      `amount.setScale(currency.minorUnits(), RoundingMode.UNNECESSARY)`. Excess precision
      throws, which we translate to `AMOUNT_PRECISION_EXCEEDED`. **We reject, never round,
-     user-supplied amounts.**
+     user-supplied amounts.** Trailing zeros beyond the currency scale (`"10.500"` INR) are
+     accepted, because dropping them loses nothing. More than 15 integer digits is rejected
+     (`OUT_OF_RANGE`), matching `DECIMAL(19,4)`.
    - Arithmetic (`plus`, `minus`, `negate`, `isNegative`) requires matching currencies;
      mixing currencies throws `CurrencyMismatchException`.
    - Comparisons use `compareTo`, never `BigDecimal.equals` (which also compares scale).

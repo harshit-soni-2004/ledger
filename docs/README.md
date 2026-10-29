@@ -1,10 +1,11 @@
 # Ledger and Reconciliation Platform — Planning Documentation
 
-Status: **Phase 1 (walking skeleton) implemented — awaiting review before Phase 2.**
+Status: **Phase 2 (accounting domain, ledger schema, internal posting engine) implemented —
+awaiting review before the next phase.** Scope of Phase 2: [10](10-roadmap.md).
 Last updated: 2026-10-29.
 
 These documents are the blueprint for a portfolio-grade double-entry ledger and bank
-reconciliation system. No application code exists yet. Every implementation phase must
+reconciliation system. Every implementation phase must
 keep these documents current; a design change lands as a doc/ADR change in the same
 pull request as the code.
 

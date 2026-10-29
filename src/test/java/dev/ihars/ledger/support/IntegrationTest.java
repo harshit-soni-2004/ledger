@@ -29,9 +29,10 @@ import org.testcontainers.utility.MountableFile;
  * least-privilege app user. Tests that need to bypass those privileges (inspecting grants,
  * probing constraints) use {@link #privilegedJdbc()}, which connects as root.
  *
- * <p>Isolation: test classes must not depend on each other's data. Any data a test writes
- * must be rolled back or removed by that test (a cleanup helper arrives with the first
- * mutable tables in Phase 3).
+ * <p>Isolation: test classes must not depend on each other's data. Ledger tables are
+ * append-only and are never cleaned up, so tests create their own accounts and assert only on
+ * those (see {@link LedgerTestData}); writes that must not persist run in a rolled-back
+ * transaction.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class IntegrationTest {
@@ -49,6 +50,8 @@ public abstract class IntegrationTest {
             .withUsername("root")
             .withCommand("--log-bin-trust-function-creators=1")
             .withStartupTimeout(Duration.ofMinutes(5))
+            // The JDBC readiness wait has its own timeout (default 120 s), separate from the above.
+            .withConnectTimeoutSeconds(300)
             .withEnv("LEDGER_DB_MIGRATION_USER", MIGRATION_USER)
             .withEnv("LEDGER_DB_MIGRATION_PASSWORD", MIGRATION_PASSWORD)
             .withEnv("LEDGER_DB_APP_USER", APP_USER)

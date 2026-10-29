@@ -3,6 +3,22 @@
 These snippets are **design proposals**, not migrations. Final DDL lands in Flyway
 migrations during Phases 3–10 and must keep this document in sync.
 
+**Implemented in Phase 2** (`V2`–`V5`, `R__runtime_grants.sql`): `accounts`,
+`account_balances`, `journal_transactions`, `ledger_entries`, `audit_events`, the
+append-only triggers and the system-account seed. Where the migrations differ from the
+snippets below, the migrations win:
+
+- Public IDs are `VARCHAR(32) ascii_bin` with a `REGEXP` check on the prefix and Crockford
+  ULID. `CHAR(30)` was too short: `acct_` + 26 characters is 31.
+- `accounts.owner_client_id` and `api_clients` are deferred to Phase 4 (authentication).
+- `fk_jtx_reverses` is composite, `(reverses_journal_id, currency)`, so a reversal is in the
+  same currency as the journal it reverses.
+- `ck_jtx_reason` uses `reason IS NOT NULL AND …`: a `CHECK` that evaluates to `NULL` passes.
+- `account_balances.min_balance` stores the floor derived from the overdraft policy
+  (`0`, `-limit`, or `NULL` for none); `ck_balances_floor` enforces `balance >= min_balance`.
+- Runtime grants are the Phase 2 subset in the "Grants" section, including a column-level
+  `UPDATE` on `account_balances`.
+
 ## Conventions
 
 | Concern | Convention | Reason |
@@ -192,8 +208,11 @@ CREATE TRIGGER trg_entries_no_delete BEFORE DELETE ON ledger_entries FOR EACH RO
 - `uk_entries_account_seq` makes a lost update or double application of the same balance
   state a **constraint violation** rather than silent corruption: two transactions that
   somehow both computed `seq = 42` cannot both commit.
-- Point-in-time balance = `balance_after` of the last entry on or before a date — O(log n)
-  via `idx_entries_account_date`, no full `SUM`.
+- `balance_after` is the running balance in **posting order** (`account_seq`). Postings may
+  be backdated (effective date in the past), so `balance_after` of the last entry on or
+  before a date is *not* the balance as of that date. `LedgerQueries.balanceAsOf` therefore
+  sums the signed entries with `effective_date <= D` (index range scan on
+  `idx_entries_account_date`). A snapshot table can make this O(1) later if needed (Phase 11).
 - Integrity: the checker verifies the chain `balance_after(n) = balance_after(n−1) ± amount(n)`.
 
 ## Enforcing "the journal balances" across rows
@@ -473,6 +492,23 @@ CREATE TABLE audit_events (
 ```
 
 ## Grants (local and CI)
+
+Implemented (Phase 2), in `R__runtime_grants.sql`. The migration user holds
+`ALL ON ledger.* WITH GRANT OPTION` from the Docker init script and applies these:
+
+```sql
+GRANT SELECT ON currencies TO '${app_user}'@'%';
+GRANT SELECT, INSERT ON accounts TO '${app_user}'@'%';
+GRANT SELECT, INSERT ON account_balances TO '${app_user}'@'%';
+GRANT UPDATE (balance, last_entry_seq, updated_at) ON account_balances TO '${app_user}'@'%';
+GRANT SELECT, INSERT ON journal_transactions TO '${app_user}'@'%';
+GRANT SELECT, INSERT ON ledger_entries TO '${app_user}'@'%';
+GRANT SELECT, INSERT ON audit_events TO '${app_user}'@'%';
+```
+
+The column-level `UPDATE` is enough for `SELECT … FOR UPDATE` on `account_balances`
+(asserted by `DatabasePrivilegesIT`). `accounts` gets column-level `UPDATE (status, name,
+updated_at)` when the account lifecycle lands. Planned target for later phases:
 
 ```sql
 -- Migration user: owns DDL (used only by Flyway)

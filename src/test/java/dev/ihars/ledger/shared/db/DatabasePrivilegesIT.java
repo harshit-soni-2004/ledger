@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The runtime user holds only explicitly granted table privileges; DDL and migration history
@@ -17,6 +18,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 class DatabasePrivilegesIT extends IntegrationTest {
 
     private static final int TABLE_ACCESS_DENIED = 1142;
+    private static final int COLUMN_ACCESS_DENIED = 1143;
 
     @Autowired
     JdbcClient jdbc;
@@ -27,7 +29,48 @@ class DatabasePrivilegesIT extends IntegrationTest {
 
         assertThat(grants).containsExactlyInAnyOrder(
                 "GRANT USAGE ON *.* TO `ledger_app`@`%`",
-                "GRANT SELECT ON `ledger`.`currencies` TO `ledger_app`@`%`");
+                "GRANT SELECT ON `ledger`.`currencies` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT ON `ledger`.`accounts` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT, UPDATE (`balance`, `last_entry_seq`, `updated_at`) ON `ledger`.`account_balances` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT ON `ledger`.`journal_transactions` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT ON `ledger`.`ledger_entries` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT ON `ledger`.`audit_events` TO `ledger_app`@`%`");
+    }
+
+    @Test
+    void appUserCannotUpdateOrDeleteAppendOnlyTables() {
+        for (String table : List.of("journal_transactions", "ledger_entries", "audit_events")) {
+            assertDenied(() -> jdbc.sql("UPDATE " + table + " SET id = id WHERE id = -1").update());
+            assertDenied(() -> jdbc.sql("DELETE FROM " + table + " WHERE id = -1").update());
+            assertDenied(() -> jdbc.sql("TRUNCATE TABLE " + table).update());
+        }
+    }
+
+    @Test
+    void appUserCannotChangeOrDeleteAccounts() {
+        assertDenied(() -> jdbc.sql("UPDATE accounts SET status = 'CLOSED' WHERE id = -1").update());
+        assertDenied(() -> jdbc.sql("DELETE FROM accounts WHERE id = -1").update());
+        assertDenied(() -> jdbc.sql("DELETE FROM account_balances WHERE account_id = -1").update());
+    }
+
+    @Test
+    void appUserMayUpdateOnlyTheBalanceProjectionColumns() {
+        assertThat(jdbc.sql("UPDATE account_balances SET balance = balance, last_entry_seq = last_entry_seq, "
+                + "updated_at = updated_at WHERE account_id = -1").update()).isZero();
+
+        for (String column : List.of("min_balance", "currency", "account_id")) {
+            assertThatThrownBy(() -> jdbc.sql("UPDATE account_balances SET " + column + " = " + column
+                            + " WHERE account_id = -1").update())
+                    .isInstanceOf(DataAccessException.class)
+                    .satisfies(e -> assertThat(mysqlErrorCode(e)).contains(COLUMN_ACCESS_DENIED));
+        }
+    }
+
+    @Test
+    @Transactional
+    void columnLevelUpdateGrantIsEnoughForLockingReads() {
+        assertThat(jdbc.sql("SELECT COUNT(*) FROM account_balances WHERE account_id = -1 FOR UPDATE")
+                .query(Integer.class).single()).isZero();
     }
 
     @Test

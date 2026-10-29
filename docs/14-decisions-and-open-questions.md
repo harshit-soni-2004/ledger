@@ -31,7 +31,8 @@
 | Q8 | Default reconciliation date tolerance | 2 days | Category distribution | Phase 9 |
 | Q9 | Payout model for MVP | Direct to Cash at Bank; clearing lifecycle as extension | Posting patterns, reconciliation of payouts | Phase 7 |
 | Q10 | ~~Public repository~~ **Decided:** local Git + GitHub Actions workflow committed; no remote created or pushed without explicit approval | — | — | Phase 1 |
-| Q12 | Property-test tooling. jqwik was removed in the Phase 1 review: it was unused, is built on JUnit Platform 1.x, and carries the maintainer's anti-AI-agent usage terms (ADR-0002) | Seeded randomized JUnit 6 tests that log their seed | Property-test tooling | Phase 2 (confirm) |
+| Q12 | ~~Property-test tooling~~ **Decided:** no jqwik; seeded randomized JUnit 6 tests with logged seeds, explicit boundary cases and reproducible failures; automatic shrinking is lost (ADR-0002) | — | — | Phase 2 |
+| Q13 | ~~Phase 2 scope~~ **Decided:** Phase 2 also delivers the Phase 3 schema and the internal Phase 4 services (posting engine, account opening, queries, integrity checker, audit events); REST endpoints and authentication stay in Phase 4; `api_clients`/`owner_client_id` deferred to Phase 4 ([10](10-roadmap.md)) | — | — | Phase 2 |
 | Q11 | License | MIT | — | Phase 11 |
 
 ## Known risks

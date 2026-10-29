@@ -115,5 +115,8 @@ Holds extension semantics (deferred):
 | JPY | 0 | `"100"` | `"100.5"` |
 | KWD | 3 | `"1.234"` | `"1.2345"` |
 
-`"10.5"` is accepted and normalized to `10.50`. Negative, zero, exponent (`"1e3"`),
-grouping separators (`"1,000.00"`), and non-numeric values are rejected.
+`"10.5"` is accepted and normalized to `10.50`. Trailing zeros beyond the currency scale
+are accepted because no value is lost (`"10.500"` INR → `10.50`); any non-zero digit beyond
+it is rejected, never rounded. Negative, zero, exponent (`"1e3"`), grouping separators
+(`"1,000.00"`), and non-numeric values are rejected. At most 15 integer digits (the range of
+`DECIMAL(19,4)`).

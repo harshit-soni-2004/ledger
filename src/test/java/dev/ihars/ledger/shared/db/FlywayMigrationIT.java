@@ -33,7 +33,9 @@ class FlywayMigrationIT extends IntegrationTest {
         assertThat(flyway.info().pending()).isEmpty();
         assertThat(applied).allSatisfy(info -> assertThat(info.getState()).isEqualTo(MigrationState.SUCCESS));
         assertThat(Arrays.stream(applied).map(MigrationInfo::getScript))
-                .contains("V1__create_currencies.sql", "R__runtime_grants.sql");
+                .contains("V1__create_currencies.sql", "V2__create_accounts_and_balances.sql",
+                        "V3__create_journals_and_entries.sql", "V4__create_audit_events.sql",
+                        "V5__seed_system_accounts.sql", "R__runtime_grants.sql");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
     }
 
@@ -65,6 +67,50 @@ class FlywayMigrationIT extends IntegrationTest {
         seeded.forEach((code, minorUnits) -> assertThat(minorUnits)
                 .as("minor units of %s", code)
                 .isEqualTo(Currency.getInstance(code).getDefaultFractionDigits()));
+    }
+
+    @Test
+    void everyCurrencyHasTheSystemAccountsWithABalanceRowAndNoFloor() {
+        // Balances are not asserted: other test classes post against the system accounts.
+        var rows = jdbc.sql("""
+                        SELECT a.currency, a.system_code, a.type, a.normal_balance, a.overdraft_policy,
+                               b.min_balance
+                          FROM accounts a JOIN account_balances b ON b.account_id = a.id
+                         WHERE a.system_code IS NOT NULL
+                        """)
+                .query((rs, n) -> {
+                    assertThat(rs.getString("overdraft_policy")).isEqualTo("UNLIMITED");
+                    assertThat(rs.getBigDecimal("min_balance")).isNull();
+                    return rs.getString("currency") + ":" + rs.getString("system_code") + ":"
+                            + rs.getString("type") + ":" + rs.getString("normal_balance");
+                })
+                .list();
+
+        assertThat(rows).hasSize(25);
+        for (String currency : new String[] {"EUR", "INR", "JPY", "KWD", "USD"}) {
+            assertThat(rows).contains(
+                    currency + ":ASSET.BANK.OPERATING:ASSET:DEBIT",
+                    currency + ":LIABILITY.SUSPENSE:LIABILITY:CREDIT",
+                    currency + ":EQUITY.OWNER_CAPITAL:EQUITY:CREDIT",
+                    currency + ":REVENUE.FEES:REVENUE:CREDIT",
+                    currency + ":EXPENSE.BANK_CHARGES:EXPENSE:DEBIT");
+        }
+    }
+
+    @Test
+    void ledgerTablesHaveAppendOnlyTriggers() {
+        var triggers = privilegedJdbc()
+                .sql("""
+                        SELECT CONCAT(event_object_table, ':', action_timing, ' ', event_manipulation)
+                          FROM information_schema.triggers WHERE trigger_schema = 'ledger'
+                        """)
+                .query(String.class)
+                .list();
+
+        assertThat(triggers).containsExactlyInAnyOrder(
+                "journal_transactions:BEFORE UPDATE", "journal_transactions:BEFORE DELETE",
+                "ledger_entries:BEFORE UPDATE", "ledger_entries:BEFORE DELETE",
+                "audit_events:BEFORE UPDATE", "audit_events:BEFORE DELETE");
     }
 
     @Test
