@@ -8,7 +8,7 @@ idempotency, integrity checks). Transfers, bank movements, CSV ingestion, and re
 are planned — see [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) and the
 [roadmap](docs/10-roadmap.md).
 
-[![ci](https://github.com/Mintu531/ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/Mintu531/ledger/actions/workflows/ci.yml)
+[![ci](https://github.com/harshit-soni-2004/ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/harshit-soni-2004/ledger/actions/workflows/ci.yml)
 
 ## Quick start
 
