@@ -3,8 +3,12 @@
 A double-entry ledger and bank reconciliation service built to stay correct under
 concurrency, retries, and crashes. Java 21, Spring Boot 4.1, MySQL 8.4, Flyway.
 
-**Status:** Phase 1 (walking skeleton). No money-moving functionality yet. The design and
-roadmap live in [`docs/`](docs/README.md).
+**Status:** Phases 0–4 are implemented (posting engine, accounts API, API-key auth,
+idempotency, integrity checks). Transfers, bank movements, CSV ingestion, and reconciliation
+are planned — see [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) and the
+[roadmap](docs/10-roadmap.md).
+
+[![ci](https://github.com/Mintu531/ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/Mintu531/ledger/actions/workflows/ci.yml)
 
 ## Quick start
 
@@ -45,6 +49,11 @@ Application sessions run with READ COMMITTED isolation, UTC, and strict SQL mode
 
 ## Documentation
 
+- [Project overview (implemented vs planned)](PROJECT_OVERVIEW.md)
 - [Overview and scope](docs/00-overview.md)
 - [Architecture](docs/01-architecture.md) and [ADRs](docs/README.md#architecture-decision-records)
 - [Roadmap](docs/10-roadmap.md)
+
+## License
+
+[MIT](LICENSE)
