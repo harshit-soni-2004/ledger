@@ -15,9 +15,11 @@ spring:
       maximum-pool-size: 20
       connection-timeout: 3000
       transaction-isolation: TRANSACTION_READ_COMMITTED
-      # Pin strict SQL mode per session so correctness never depends on server defaults.
+      # Pin strict SQL mode per session so correctness never depends on server defaults. Lock
+      # waits fail after 5 s instead of the server default of 50 s (ADR-0005).
       connection-init-sql: >-
-        SET SESSION sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+        SET SESSION sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION',
+            SESSION innodb_lock_wait_timeout = 5
   flyway:
     # Migrations run as the DDL-capable migration user, never as the runtime user.
     user: ${LEDGER_DB_MIGRATION_USER}
@@ -29,6 +31,10 @@ spring:
       "[app_user]": ${LEDGER_DB_APP_USER}
   lifecycle:
     timeout-per-shutdown-phase: 20s
+
+ledger:
+  # Business-date zone for effective and as-of dates (docs/14 Q5).
+  business-zone: ${LEDGER_REPORTING_ZONE:Asia/Kolkata}
 
 server:
   port: ${LEDGER_HTTP_PORT:8080}

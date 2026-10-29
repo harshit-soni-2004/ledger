@@ -32,6 +32,11 @@ class StrictSqlModeIT extends IntegrationTest {
     }
 
     @Test
+    void applicationSessionsGiveUpOnLockWaitsAfterFiveSeconds() {
+        assertThat(jdbc.sql("SELECT @@SESSION.innodb_lock_wait_timeout").query(Integer.class).single()).isEqualTo(5);
+    }
+
+    @Test
     void serverDefaultIsAlsoStrict() {
         String globalMode = privilegedJdbc().sql("SELECT @@GLOBAL.sql_mode").query(String.class).single();
 

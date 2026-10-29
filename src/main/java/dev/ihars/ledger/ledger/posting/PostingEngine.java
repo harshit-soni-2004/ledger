@@ -13,10 +13,9 @@ import dev.ihars.ledger.ledger.domain.PostingPlan.BalanceChange;
 import dev.ihars.ledger.ledger.domain.PostingPlan.PlannedEntry;
 import dev.ihars.ledger.ledger.infrastructure.JdbcLedgerWriter;
 import dev.ihars.ledger.shared.id.PublicIdGenerator;
+import dev.ihars.ledger.shared.time.BusinessCalendar;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,12 +41,15 @@ public class PostingEngine {
     private final AuditTrail audit;
     private final PublicIdGenerator ids;
     private final Clock clock;
+    private final BusinessCalendar calendar;
 
-    public PostingEngine(JdbcLedgerWriter writer, AuditTrail audit, PublicIdGenerator ids, Clock clock) {
+    public PostingEngine(JdbcLedgerWriter writer, AuditTrail audit, PublicIdGenerator ids, Clock clock,
+            BusinessCalendar calendar) {
         this.writer = writer;
         this.audit = audit;
         this.ids = ids;
         this.clock = clock;
+        this.calendar = calendar;
     }
 
     /**
@@ -68,7 +70,7 @@ public class PostingEngine {
         Map<Long, AccountSnapshot> locked = writer.lockAccounts(accountIds);
 
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
-        PostingPlan plan = PostingCalculator.plan(draft, locked, LocalDate.ofInstant(now, ZoneOffset.UTC));
+        PostingPlan plan = PostingCalculator.plan(draft, locked, calendar.dateOf(now));
 
         String publicId = ids.next(PublicIdGenerator.Prefix.JOURNAL);
         long journalId = writer.insertJournal(publicId, draft, now, context.actor().id(), context.requestId(),

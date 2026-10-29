@@ -30,7 +30,7 @@ public final class PostingCalculator {
 
     /**
      * @param accounts snapshots of every account the draft touches, read under lock
-     * @param today the current business date (UTC); postings may not be future-dated
+     * @param today the current business date (BusinessCalendar zone); postings may not be future-dated
      */
     public static PostingPlan plan(JournalDraft draft, Map<Long, AccountSnapshot> accounts, LocalDate today) {
         if (draft.effectiveDate().isAfter(today)) {

@@ -4,6 +4,7 @@ import dev.ihars.ledger.accounts.AccountService;
 import dev.ihars.ledger.ledger.integrity.IntegrityChecker;
 import dev.ihars.ledger.ledger.posting.PostingEngine;
 import dev.ihars.ledger.ledger.query.LedgerQueries;
+import dev.ihars.ledger.shared.time.BusinessCalendar;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,11 +33,14 @@ public abstract class LedgerIntegrationTest extends IntegrationTest {
     @Autowired
     protected Clock clock;
 
+    @Autowired
+    protected BusinessCalendar calendar;
+
     protected LedgerTestData data;
 
     @BeforeEach
     void ledgerTestData() {
-        data = new LedgerTestData(accounts, engine, clock);
+        data = new LedgerTestData(accounts, engine, calendar);
     }
 
     protected static long count(String sql, Object... params) {

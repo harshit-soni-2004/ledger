@@ -10,9 +10,8 @@ import dev.ihars.ledger.ledger.posting.PostedJournal;
 import dev.ihars.ledger.ledger.posting.PostingContext;
 import dev.ihars.ledger.ledger.posting.PostingEngine;
 import dev.ihars.ledger.shared.money.Money;
-import java.time.Clock;
+import dev.ihars.ledger.shared.time.BusinessCalendar;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 
 /**
  * Creates ledger data through the real services. Ledger tables are append-only and cannot be
@@ -26,12 +25,12 @@ public final class LedgerTestData {
 
     private final AccountService accounts;
     private final PostingEngine engine;
-    private final Clock clock;
+    private final BusinessCalendar calendar;
 
-    public LedgerTestData(AccountService accounts, PostingEngine engine, Clock clock) {
+    public LedgerTestData(AccountService accounts, PostingEngine engine, BusinessCalendar calendar) {
         this.accounts = accounts;
         this.engine = engine;
-        this.clock = clock;
+        this.calendar = calendar;
     }
 
     public Account wallet(String currency) {
@@ -47,7 +46,7 @@ public final class LedgerTestData {
     }
 
     public LocalDate today() {
-        return LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
+        return calendar.today();
     }
 
     /** Bank cash in, wallet liability up. */
