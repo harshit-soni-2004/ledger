@@ -30,3 +30,7 @@ GRANT SELECT, INSERT ON idempotency_records TO '${app_user}'@'%';
 GRANT UPDATE (response_status, response_body, resource_id) ON idempotency_records TO '${app_user}'@'%';
 
 GRANT SELECT, INSERT ON integrity_check_runs TO '${app_user}'@'%';
+
+-- Transfers are written once (POSTED or REJECTED). The status change to REVERSED needs an
+-- UPDATE grant that arrives with reversals.
+GRANT SELECT, INSERT ON transfers TO '${app_user}'@'%';

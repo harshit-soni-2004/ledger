@@ -38,12 +38,14 @@ class DatabasePrivilegesIT extends IntegrationTest {
                 "GRANT SELECT, INSERT, UPDATE (`status`, `updated_at`) ON `ledger`.`api_clients` TO `ledger_app`@`%`",
                 "GRANT SELECT, INSERT, UPDATE (`revoked_at`, `status`) ON `ledger`.`api_keys` TO `ledger_app`@`%`",
                 "GRANT SELECT, INSERT, UPDATE (`resource_id`, `response_body`, `response_status`) ON `ledger`.`idempotency_records` TO `ledger_app`@`%`",
-                "GRANT SELECT, INSERT ON `ledger`.`integrity_check_runs` TO `ledger_app`@`%`");
+                "GRANT SELECT, INSERT ON `ledger`.`integrity_check_runs` TO `ledger_app`@`%`",
+                "GRANT SELECT, INSERT ON `ledger`.`transfers` TO `ledger_app`@`%`");
     }
 
     @Test
     void appUserCannotUpdateOrDeleteAppendOnlyTables() {
-        for (String table : List.of("journal_transactions", "ledger_entries", "audit_events", "integrity_check_runs")) {
+        for (String table : List.of("journal_transactions", "ledger_entries", "audit_events", "integrity_check_runs",
+                "transfers")) {
             assertDenied(() -> jdbc.sql("UPDATE " + table + " SET id = id WHERE id = -1").update());
             assertDenied(() -> jdbc.sql("DELETE FROM " + table + " WHERE id = -1").update());
             assertDenied(() -> jdbc.sql("TRUNCATE TABLE " + table).update());

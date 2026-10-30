@@ -37,7 +37,7 @@ class FlywayMigrationIT extends IntegrationTest {
                         "V3__create_journals_and_entries.sql", "V4__create_audit_events.sql",
                         "V5__seed_system_accounts.sql", "V6__create_api_clients_and_account_ownership.sql",
                         "V7__create_idempotency_records.sql", "V8__create_integrity_check_runs.sql",
-                        "R__runtime_grants.sql");
+                        "V9__create_transfers.sql", "R__runtime_grants.sql");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
     }
 
@@ -113,7 +113,8 @@ class FlywayMigrationIT extends IntegrationTest {
                 "journal_transactions:BEFORE UPDATE", "journal_transactions:BEFORE DELETE",
                 "ledger_entries:BEFORE UPDATE", "ledger_entries:BEFORE DELETE",
                 "audit_events:BEFORE UPDATE", "audit_events:BEFORE DELETE",
-                "integrity_check_runs:BEFORE UPDATE", "integrity_check_runs:BEFORE DELETE");
+                "integrity_check_runs:BEFORE UPDATE", "integrity_check_runs:BEFORE DELETE",
+                "transfers:BEFORE DELETE");
     }
 
     @Test

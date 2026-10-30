@@ -28,8 +28,9 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>The key is claimed, the operation runs and its response is stored in <em>one</em>
  * transaction, so a committed key always has an outcome and a failed operation leaves no key
- * behind (the client may retry with the same key). Only 2xx responses are stored; business
- * rejections and errors roll back.
+ * behind (the client may retry with the same key). 2xx responses are stored; so are business
+ * rejections the operation chooses to commit ({@link Outcome#rejected}). Every exception rolls
+ * back.
  *
  * <p>Concurrency is resolved by the unique scope {@code (client, operation, key)}: a duplicate
  * blocks on the insert until the first transaction ends. If it committed, the duplicate replays
@@ -106,8 +107,9 @@ public class IdempotencyService {
     }
 
     private static ResponseEntity<String> respond(IdempotentRequest request, StoredRecord stored, boolean replayed) {
+        boolean successful = stored.status() < 300;
         ResponseEntity.BodyBuilder response = ResponseEntity.status(stored.status());
-        if (request.location() != null && stored.resourceId() != null) {
+        if (successful && request.location() != null && stored.resourceId() != null) {
             response.location(request.location().apply(stored.resourceId()));
         }
         if (replayed) {
@@ -116,7 +118,8 @@ public class IdempotencyService {
         if (stored.body() == null) {
             return response.build();
         }
-        return response.contentType(MediaType.APPLICATION_JSON).body(stored.body());
+        return response.contentType(successful ? MediaType.APPLICATION_JSON : MediaType.APPLICATION_PROBLEM_JSON)
+                .body(stored.body());
     }
 
     private byte[] fingerprint(IdempotentRequest request) {

@@ -16,7 +16,8 @@ public class PublicIdGenerator {
         JOURNAL("jtx"),
         CLIENT("cli"),
         API_KEY("key"),
-        INTEGRITY_CHECK("ichk");
+        INTEGRITY_CHECK("ichk"),
+        TRANSFER("trf");
 
         private final String value;
 
