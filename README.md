@@ -85,7 +85,8 @@ On first start, MySQL creates the migration and runtime users
 migration user, then serves requests as the least-privilege runtime user. Data lives in the
 `ledger-mysql-data` volume; `docker compose down` keeps it, `docker compose down -v` deletes it.
 Ports are bound to `127.0.0.1` only; change them with `LEDGER_HTTP_PORT` and
-`LEDGER_DB_HOST_PORT`.
+`LEDGER_DB_HOST_PORT`. Variables already set in your shell override `.env` for Compose, so
+check `env | grep LEDGER_` if the stack does not pick up a value.
 
 ## Local development
 
