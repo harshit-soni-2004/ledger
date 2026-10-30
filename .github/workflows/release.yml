@@ -1,0 +1,40 @@
+name: release
+
+# Builds the container image and publishes it to GitHub Container Registry when a version tag
+# (v1.2.3) is pushed. Uses only the built-in GITHUB_TOKEN; it does not deploy anything.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # A release image is only published from a commit that passes the full suite.
+      - name: Verify
+        run: ./mvnw -B -ntp verify
+
+      - name: Build and push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build -t "$image:$REF_NAME" -t "$image:latest" .
+          docker push "$image:$REF_NAME"
+          docker push "$image:latest"

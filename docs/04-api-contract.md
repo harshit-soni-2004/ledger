@@ -32,9 +32,9 @@ domain operations (deposit, payout, transfer, reversal, ADMIN adjustment via res
 | GET | `/accounts/{accountId}/entries` | owner, OPERATOR, ADMIN | — | Entries newest first, keyset paginated. Filters `from`, `to`, `direction`, `journalType` not implemented yet |
 | POST | `/accounts/{accountId}/freeze` | OPERATOR, ADMIN | required | `{ "reason": … }`; ACTIVE → FROZEN |
 | POST | `/accounts/{accountId}/unfreeze` · `/close` | ADMIN | required | FROZEN → ACTIVE; ACTIVE/FROZEN → CLOSED (zero balance only, terminal) |
-| POST | `/transfers` | CLIENT (owns source) | required | Same-currency transfer |
-| GET | `/transfers/{transferId}` | owner, OPERATOR, ADMIN | — | Transfer status |
-| GET | `/transfers?clientReference=…&status=…&from=…&to=…` | owner | — | Lookup after unknown outcome; history |
+| POST | `/transfers` | CLIENT (owns source) | required | Same-currency transfer between customer wallets (LIABILITY, non-system) |
+| GET | `/transfers/{transferId}` | owner, OPERATOR, ADMIN | — | Transfer status (`POSTED` or `REJECTED` with `rejectionCode`) |
+| GET | `/transfers?clientReference=…&status=…&clientId=…` | CLIENT (own), OPERATOR, ADMIN | — | Newest first, keyset paginated; `clientId` for OPERATOR/ADMIN. `from`/`to` filters not implemented yet |
 | GET | `/journal-transactions/{journalId}` | OPERATOR, ADMIN | — | Header, entries, reversal links |
 | POST | `/journal-transactions/openings` | ADMIN | required | Opening balances: reason required; every non-system account must have no entries; backdating allowed, no future dates |
 | POST | `/api-clients` | ADMIN | not replayable | Create a client and its first key (token shown once, `Cache-Control: no-store`) |
@@ -171,6 +171,23 @@ Validation rules:
 - `amount.value` > 0, scale ≤ currency minor units, ≤ configured max single amount.
 - `description` ≤ 255 chars; `clientReference` ≤ 64 chars, `[A-Za-z0-9._:-]`.
 
+As implemented (Phase 5):
+
+| Check | When | Response | Recorded? |
+|---|---|---|---|
+| Source unknown or not owned by the caller | before the transaction | `422 ACCOUNT_NOT_FOUND` | No |
+| Destination unknown or a system account | before | `422 ACCOUNT_NOT_FOUND` | No |
+| Source = destination; malformed amount or `clientReference` | before | `400 VALIDATION_FAILED` | No |
+| An account is not a LIABILITY wallet | before | `422 TRANSFER_NOT_ALLOWED` | No |
+| Amount currency ≠ either account currency | before | `422 CURRENCY_MISMATCH` | No |
+| Source would fall below its floor | under the balance locks | `422 INSUFFICIENT_FUNDS` + `transferId` | Yes, `REJECTED`, replayed for the key |
+| Source or destination not `ACTIVE` | under the balance locks | `422 ACCOUNT_NOT_ACTIVE` + `transferId` | Yes, `REJECTED`, replayed for the key |
+
+There is no configured maximum single amount yet; amounts are bounded by `DECIMAL(19,4)`.
+The journal's `externalReference` is the `clientReference`. Lock conflicts are retried up to
+three times; after that the answer is `503 RESOURCE_BUSY` with `Retry-After: 1` (planned name
+`CONTENTION_RETRY_EXHAUSTED`), and nothing is recorded.
+
 ### Reversal
 
 ```http
@@ -275,10 +292,11 @@ Allowed actions per category: see [07-reconciliation.md](07-reconciliation.md).
 | 413 | `PAYLOAD_TOO_LARGE` | File > 10 MB | No |
 | 422 | `INSUFFICIENT_FUNDS` | Floor would be breached | New key after funding |
 | 422 | `CURRENCY_MISMATCH` | Account/amount currencies differ | No |
+| 422 | `TRANSFER_NOT_ALLOWED` | Transfer involves a non-wallet account | No |
 | 422 | `ACCOUNT_NOT_ACTIVE` | Frozen or closed account | No |
 | 422 | `IDEMPOTENCY_KEY_REUSED` | Same key, different request | No |
 | 422 | `CANNOT_REVERSE_REVERSAL` | Reversal of a reversal | No |
 | 422 | `STATEMENT_REJECTED` | File-level validation failure | No |
 | 422 | `RESOLUTION_NOT_ALLOWED` | Action not valid for item category | No |
-| 503 | `CONTENTION_RETRY_EXHAUSTED` | Deadlock/lock retries exhausted | Yes, same key |
+| 503 | `CONTENTION_RETRY_EXHAUSTED` | Deadlock/lock retries exhausted (implemented as `RESOURCE_BUSY`) | Yes, same key |
 | 500 | `INTERNAL_ERROR` | Unexpected; no internals leaked | Yes, same key |

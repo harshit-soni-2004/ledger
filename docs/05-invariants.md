@@ -39,6 +39,9 @@ Enforcement layers legend:
 | I20 | No account with an UNLIMITED overdraft is created through the API; CLIENTs and OPERATORs open only FORBIDDEN liability wallets | APP only (`AccountOpeningPolicy`); the database and `AccountService` allow it because migrations and tests need it | `AccountsApiIT` |
 | I21 | An `OPENING` journal is only ever the first entry of every non-system account in it | LOCK + APP (`PostingEngine.postOpening` checks `last_entry_seq = 0` under the balance locks; `post` refuses `OPENING`) | `JournalsApiIT` (incl. two concurrent openings) |
 | I22 | Integrity-check results cannot be changed or deleted | DB-G (`trg_icr_no_update`, `trg_icr_no_delete`, `INSERT`-only grant) | `FlywayMigrationIT`, `DatabasePrivilegesIT` |
+| I23 | A transfer never overdraws its source, even under concurrent requests; a POSTED transfer has exactly one journal in its own currency, between two distinct accounts of that currency | LOCK + APP (posting engine floor check under the balance lock), DB-C (`ck_transfers_status`, `ck_transfers_distinct`, `ck_transfers_amount`, composite FKs to `accounts (id, currency)` and `journal_transactions (id, currency)`, `uk_transfers_journal`) | `TransfersApiIT` (16-thread overspend race, schema constraints) |
+| I24 | One Idempotency-Key is one transfer attempt: retries replay the stored outcome, including a business rejection, and never post twice | DB-C (`uk_idem_scope`, permanent `uk_transfers_client_key`), APP (rejection recorded in the claiming transaction) | `TransfersApiIT` (replay, rejected replay, concurrent duplicates) |
+| I25 | Transfers are never deleted or edited by the runtime user | DB-G (`trg_transfers_no_delete`, `SELECT, INSERT` only) | `DatabasePrivilegesIT`, `FlywayMigrationIT` |
 
 ## Why each layer exists
 

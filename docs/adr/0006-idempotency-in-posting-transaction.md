@@ -49,8 +49,12 @@ Pulled forward from Phase 5 (`IdempotencyService`, `V7__create_idempotency_recor
 - `request_hash` is SHA-256 over the operation name and the JSON of the parsed request
   record (plus path ids for lifecycle calls). Amounts are hashed as sent, so `"10.0"` and
   `"10.00"` count as different requests; the result is a `422`, never a duplicate effect.
-- Point 7 (committing business rejections) applies to transfers and is not used yet: in
-  Phase 4 every rejection rolls back, so the same key can be retried after fixing the request.
+- Point 7 (committing business rejections) is used by transfers since Phase 5:
+  `INSUFFICIENT_FUNDS` and `ACCOUNT_NOT_ACTIVE` commit a `REJECTED` transfer and a stored
+  `422` Problem Details response (`Outcome.rejected`), replayed for the same key. To let the
+  rejection commit in the same transaction, `PostingEngine.post` does not mark the caller's
+  transaction rollback-only for `JournalRejectedException`; it is thrown before any write.
+  Every other rejection (validation, account lifecycle, openings) still rolls back.
 - `409 REQUEST_IN_PROGRESS` carries `Retry-After: 1`. The session lock-wait timeout is 5 s.
 - The purge job is deferred: the runtime user has no `DELETE` on `idempotency_records`, and an
   expired key keeps replaying (`expires_at` is informational until the purge lands).
