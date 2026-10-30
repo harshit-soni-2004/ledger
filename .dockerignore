@@ -1,0 +1,16 @@
+# Only the Maven wrapper, pom.xml and src/ are needed to build the image.
+# Secrets must never reach the build context.
+.env
+.env.*
+!.env.example
+
+.git/
+.github/
+target/
+docs/
+docker/
+*.md
+.idea/
+.vscode/
+*.iml
+*.log
