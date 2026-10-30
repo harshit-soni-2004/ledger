@@ -11,16 +11,16 @@ docker compose up -d mysql        # MySQL 8.4, healthcheck, users created by ini
 ./mvnw verify                     # unit + integration tests (Testcontainers)
 ```
 
-Optional later: `docker compose --profile app up` (app container) and
-`docker compose --profile observability up` (Prometheus + Grafana).
+The whole stack in containers: `docker compose up -d --build --wait`. An
+`observability` profile (Prometheus + Grafana) is still planned.
 
-### Docker Compose (planned shape)
+### Docker Compose (implemented)
 
 | Service | Image | Notes |
 |---|---|---|
 | `mysql` | `mysql:8.4` | Port 3306 bound to localhost only; named volume; `--log-bin-trust-function-creators=1`; healthcheck `mysqladmin ping` (no credentials); init script `docker/mysql/init/01-users.sh`; host port overridable with `LEDGER_DB_HOST_PORT` |
-| `app` (profile `app`) | built from `Dockerfile` | Waits for `mysql` healthy; env from `.env`; non-root user |
-| `prometheus`, `grafana` (profile `observability`) | official images | Phase 11, optional |
+| `app` | built from `Dockerfile` (`ledger:local`) | Starts after `mysql` is healthy; JDBC URL points at `mysql:3306`; values from `.env`; non-root, read-only root filesystem with tmpfs `/tmp`, `no-new-privileges`; readiness healthcheck; 30 s stop grace period; host port `LEDGER_HTTP_PORT` |
+| `prometheus`, `grafana` (profile `observability`) | official images | Phase 11, optional, not implemented |
 
 ### Configuration and secrets
 
@@ -53,7 +53,8 @@ Rules: `.env` is git-ignored; `.env.example` holds placeholders only; no secrets
 ## Health checks
 
 - `/actuator/health/liveness` — process alive.
-- `/actuator/health/readiness` — DB reachable, Flyway complete, disk space OK.
+- `/actuator/health/readiness` — readiness state and DB reachable (Flyway runs before the
+  application reports ready).
 - Graceful shutdown (`server.shutdown=graceful`, 20 s).
 
 ## Structured logging
@@ -105,14 +106,21 @@ are only quoted on a resume after they are recorded there.
 | Job | Trigger | Steps |
 |---|---|---|
 | `verify` | push, PR | checkout → JDK 21 (Temurin) + Maven cache → `./mvnw -B verify` (compile, unit, Testcontainers ITs, Flyway migrate/validate, ArchUnit, JaCoCo report) → upload test reports on failure |
-| `security` | push, PR | Gitleaks secret scan; Dependabot (config file) for Maven and Actions |
-| `image` | push to `main` (Phase 11) | Build container image; optional Trivy scan; no registry push required |
+| `secrets` | push, PR | Gitleaks v8.30.1 over the full history; known false positives in `.gitleaksignore` |
+| `image` | push, PR (after `verify`) | Throwaway `.env` → `docker compose config` → build and start the stack → smoke test (readiness, 401 without a key, clean integrity check) → `down -v` |
+| `release` (`release.yml`) | tag `v*` | `verify`, then build and push `ghcr.io/<owner>/ledger:<tag>` with `GITHUB_TOKEN`; no deployment |
+
+Dependabot (`.github/dependabot.yml`) opens weekly PRs against `develop` for Maven, GitHub
+Actions and Docker base images. Trivy image scanning is not configured yet.
 
 Branch protection on `main`: `verify` must pass.
 
-## Container (Phase 11)
+## Container (implemented)
 
-- Multi-stage build: Maven build stage → `eclipse-temurin:21-jre` runtime (or Jib).
-- Non-root user, read-only filesystem where possible, `JAVA_TOOL_OPTIONS` for memory limits.
-- Healthcheck hits readiness endpoint.
-- Configuration exclusively via environment variables.
+- Multi-stage build: `eclipse-temurin:21-jdk` build stage (Maven wrapper; `unzip` installed so
+  the wrapper downloads the pinned `.zip` distribution) → `eclipse-temurin:21-jre` runtime.
+- Non-root user (UID 10001), read-only root filesystem in Compose, `JAVA_TOOL_OPTIONS`
+  `-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError`.
+- `HEALTHCHECK` hits the readiness endpoint with `curl`.
+- Configuration exclusively via environment variables; `.dockerignore` keeps `.env` out of the
+  build context. Deployment: [15](15-deployment.md).

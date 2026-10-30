@@ -230,7 +230,20 @@ Decisions carried over from the Phase 2 review (must be settled in this phase):
 
 ---
 
-## Phase 5 — Transfers, idempotency, concurrency, overdraft prevention
+## Phase 5 — Transfers, idempotency, concurrency, overdraft prevention ✅ (core)
+
+Implemented: `transfers` table (V9) with composite currency FKs and status CHECKs;
+`POST /transfers`, `GET /transfers/{id}`, `GET /transfers` (status, clientReference, clientId,
+keyset pagination); recorded and replayed `REJECTED` transfers for `INSUFFICIENT_FUNDS` and
+`ACCOUNT_NOT_ACTIVE` (Q3); `LockContentionRetry` around the whole transaction (3 attempts,
+jittered backoff); tests for a 16-thread overspend race, concurrent duplicate keys, frozen
+accounts, validation and schema constraints. Idempotency itself shipped in Phase 4.
+
+Still open from this phase: the idempotency purge job (and its `DELETE` grant), the
+`ledger.*` Micrometer metrics, `from`/`to` filters on the transfer list, a configurable
+maximum single amount, and the "20 consecutive runs" soak of the concurrency tests.
+
+Original plan:
 
 - **Learn first:** lost updates; InnoDB locking reads vs snapshot reads; deadlocks and
   victim selection; idempotency keys (IETF draft, Stripe's design); retry with jitter.
@@ -328,6 +341,14 @@ Decisions carried over from the Phase 2 review (must be settled in this phase):
 ---
 
 ## Phase 11 — Hardening, performance, observability, release
+
+Pulled forward and done: multi-stage `Dockerfile` (JRE, non-root, readiness healthcheck),
+Compose `app` service (read-only, waits for MySQL), Gitleaks and a Docker smoke-test job in
+CI, Dependabot, a tag-triggered GHCR release workflow, the deployment guide
+([15](15-deployment.md)) and a full README. Not done: crash/restart tests, data generator,
+k6 benchmarks, observability profile, demo script.
+
+Original plan:
 
 - **Learn first:** `EXPLAIN ANALYZE`; latency percentiles; coordinated omission; load-test design; container hardening.
 - **Prerequisites:** Phase 10.

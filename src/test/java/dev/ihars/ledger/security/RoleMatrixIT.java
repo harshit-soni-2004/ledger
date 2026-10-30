@@ -24,6 +24,7 @@ class RoleMatrixIT extends IntegrationTest {
     private static final Set<ApiRole> ANY = EnumSet.allOf(ApiRole.class);
     private static final Set<ApiRole> STAFF = EnumSet.of(OPERATOR, ADMIN);
     private static final Set<ApiRole> ADMIN_ONLY = EnumSet.of(ADMIN);
+    private static final Set<ApiRole> CLIENT_ONLY = EnumSet.of(CLIENT);
     private static final Set<ApiRole> NOBODY = EnumSet.noneOf(ApiRole.class);
 
     private record Route(String method, String path, String body, Set<ApiRole> allowed) {}
@@ -42,7 +43,9 @@ class RoleMatrixIT extends IntegrationTest {
             new Route("GET", "/api/v1/ops/integrity-checks/latest", null, ADMIN_ONLY),
             new Route("POST", "/api/v1/api-clients", "{}", ADMIN_ONLY),
             new Route("GET", "/api/v1/api-clients/cli_00000000000000000000000000", null, ADMIN_ONLY),
-            new Route("POST", "/api/v1/transfers", "{}", NOBODY),
+            new Route("POST", "/api/v1/transfers", "{}", CLIENT_ONLY),
+            new Route("GET", "/api/v1/transfers", null, ANY),
+            new Route("GET", "/api/v1/transfers/trf_00000000000000000000000000", null, ANY),
             new Route("GET", "/api/v1/deposits", null, NOBODY));
 
     @Test

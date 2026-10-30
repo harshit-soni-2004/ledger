@@ -56,9 +56,13 @@ public class PostingEngine {
     /**
      * Posts a journal atomically.
      *
+     * <p>A rejection is raised before anything is written, so it does not mark a caller's
+     * transaction rollback-only: the caller may record the rejection in the same transaction
+     * (transfers do). Without a caller transaction, the empty transaction just commits.
+     *
      * @throws JournalRejectedException if an accounting rule rejects the journal; nothing is written
      */
-    @Transactional
+    @Transactional(noRollbackFor = JournalRejectedException.class)
     public PostedJournal post(JournalDraft draft, PostingContext context) {
         if (draft.type() == JournalType.REVERSAL) {
             throw new JournalRejectedException(JournalRejectedException.Code.REVERSAL_NOT_SUPPORTED,

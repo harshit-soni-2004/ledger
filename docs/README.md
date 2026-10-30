@@ -1,8 +1,9 @@
 # Ledger and Reconciliation Platform — Planning Documentation
 
-Status: **Phase 2 (accounting domain, ledger schema, internal posting engine) implemented —
-awaiting review before the next phase.** Scope of Phase 2: [10](10-roadmap.md).
-Last updated: 2026-10-29.
+Status: **Phases 0–5 implemented** (accounting domain, posting engine, accounts, API-key
+security, idempotency, integrity checks, transfers), plus the container image, Compose stack
+and CI/CD from Phase 11. Phases 6–10 are designed, not built. See [10](10-roadmap.md).
+Last updated: 2026-10-30.
 
 These documents are the blueprint for a portfolio-grade double-entry ledger and bank
 reconciliation system. Every implementation phase must
@@ -28,6 +29,7 @@ pull request as the code.
 | 12 | [README outline and demo](12-readme-outline-and-demo.md) | Future project README and demo scenarios |
 | 13 | [Interview preparation](13-interview-prep.md) | Resume outcomes and the measurements behind them; interview questions |
 | 14 | [Decisions and open questions](14-decisions-and-open-questions.md) | Decision log and unresolved items |
+| 15 | [Deployment](15-deployment.md) | Image, database provisioning, secrets, migrations, probes, production checklist |
 
 ## Architecture Decision Records
 
@@ -41,7 +43,7 @@ pull request as the code.
 | [0006](adr/0006-idempotency-in-posting-transaction.md) | Idempotency recorded in the posting transaction | Accepted |
 | [0007](adr/0007-single-currency-journals.md) | Single-currency journals; no cross-currency MVP | Accepted |
 | [0008](adr/0008-immutability-and-reversals.md) | Append-only ledger; corrections by reversal | Accepted |
-| [0009](adr/0009-authentication.md) | API-key authentication with roles | Proposed |
+| [0009](adr/0009-authentication.md) | API-key authentication with roles | Accepted (Phase 4) |
 | [0010](adr/0010-deferred-infrastructure.md) | Defer Kafka, Redis, Kubernetes, heavy monitoring | Accepted |
 
 ADR statuses: *Proposed* (default chosen, awaiting confirmation), *Accepted*, *Superseded*.

@@ -56,9 +56,13 @@ read because a non-locking read joined into the balance-lock statement would use
 taken before the lock wait and could miss a freeze that committed meanwhile
 (`AccountLifecycleIT` covers both orders).
 
-Phase 4 has no retry wrapper yet: a lock-wait timeout or deadlock anywhere outside the
-idempotency insert rolls the request back and returns `503 RESOURCE_BUSY` with
-`Retry-After: 1`; the client retries with the same key.
+Transfers are wrapped in `LockContentionRetry` (Phase 5): a deadlock or lock-wait timeout
+re-runs the whole idempotent transaction up to three times (20 ms × 2ⁿ backoff, ±50 %
+jitter). The wrapper refuses to run inside a transaction. Other operations (account
+lifecycle, openings) are not retried; for them, and for a transfer after the last attempt, the
+request is rolled back and answered with `503 RESOURCE_BUSY` and `Retry-After: 1`, and the
+client retries with the same key. A lock-wait timeout on the idempotency insert itself is
+`409 REQUEST_IN_PROGRESS` and is never retried server-side.
 
 ### Classic deadlock this prevents
 

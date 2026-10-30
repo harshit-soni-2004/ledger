@@ -35,6 +35,16 @@ snippets below, the migrations win:
   `violations JSON`), append-only through `trg_icr_no_update` / `trg_icr_no_delete` and an
   `INSERT`-only grant.
 
+**Implemented in Phase 5** (`V9__create_transfers.sql`): `transfers` as designed below, with
+these differences: `public_id VARCHAR(32)` with a `trf_` ULID CHECK; composite FKs
+`(source_account_id, currency)` and `(destination_account_id, currency)` to
+`accounts (id, currency)` and `(journal_id, currency)` to `journal_transactions (id, currency)`,
+so a transfer, its accounts and its journal always share one currency; an FK to `api_clients`;
+`ck_transfers_status` also requires `rejection_code IS NULL` for POSTED and REVERSED; index
+`(client_id, id)` for newest-first listing instead of `(client_id, created_at, id)`;
+`trg_transfers_no_delete`. The runtime user has `SELECT, INSERT` only; `UPDATE (status,
+reversal_journal_id, updated_at)` arrives with reversals.
+
 ## Conventions
 
 | Concern | Convention | Reason |

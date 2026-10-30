@@ -1,5 +1,9 @@
 name: ledger
 
+# `docker compose up -d --build` starts MySQL and the application.
+# `docker compose up -d mysql` starts only the database (run the app with ./mvnw spring-boot:run).
+# Every value comes from .env (see .env.example); nothing secret is written here.
+
 services:
   mysql:
     image: mysql:8.4
@@ -27,6 +31,38 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+    restart: unless-stopped
+
+  app:
+    build: .
+    image: ledger:local
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # Inside the Compose network the database is the `mysql` service, not localhost.
+      LEDGER_DB_URL: jdbc:mysql://mysql:3306/ledger?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      LEDGER_DB_MIGRATION_USER: ${LEDGER_DB_MIGRATION_USER:?set LEDGER_DB_MIGRATION_USER in .env}
+      LEDGER_DB_MIGRATION_PASSWORD: ${LEDGER_DB_MIGRATION_PASSWORD:?set LEDGER_DB_MIGRATION_PASSWORD in .env}
+      LEDGER_DB_APP_USER: ${LEDGER_DB_APP_USER:?set LEDGER_DB_APP_USER in .env}
+      LEDGER_DB_APP_PASSWORD: ${LEDGER_DB_APP_PASSWORD:?set LEDGER_DB_APP_PASSWORD in .env}
+      LEDGER_BOOTSTRAP_ADMIN_KEY: ${LEDGER_BOOTSTRAP_ADMIN_KEY:-}
+      LEDGER_REPORTING_ZONE: ${LEDGER_REPORTING_ZONE:-Asia/Kolkata}
+      LEDGER_INTEGRITY_SCHEDULE_ENABLED: ${LEDGER_INTEGRITY_SCHEDULE_ENABLED:-true}
+      LEDGER_INTEGRITY_CRON: ${LEDGER_INTEGRITY_CRON:-0 30 2 * * *}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      # The container always listens on 8080; LEDGER_HTTP_PORT only picks the host port.
+      LEDGER_HTTP_PORT: "8080"
+    ports:
+      - "127.0.0.1:${LEDGER_HTTP_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    # Longer than the application's 20 s graceful-shutdown phase.
+    stop_grace_period: 30s
+    restart: unless-stopped
 
 volumes:
   ledger-mysql-data:
