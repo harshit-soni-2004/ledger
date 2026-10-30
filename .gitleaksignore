@@ -1,0 +1,4 @@
+# Example Idempotency-Key UUIDs in the API contract (not credentials). They live in the first
+# commit, which is never rewritten, so they are allow-listed by exact fingerprint.
+1d532d3d46cb472a13955d601bbcfc2bddd66e9b:docs/04-api-contract.md:generic-api-key:79
+1d532d3d46cb472a13955d601bbcfc2bddd66e9b:docs/04-api-contract.md:generic-api-key:129

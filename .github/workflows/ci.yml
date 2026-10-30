@@ -40,3 +40,65 @@ jobs:
             target/surefire-reports/
             target/failsafe-reports/
           retention-days: 7
+
+  secrets:
+    name: secret scan (Gitleaks, full history)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Known false positives are allow-listed by fingerprint in .gitleaksignore.
+      - name: Gitleaks
+        run: >-
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1
+          git /repo --no-banner --redact --exit-code 1
+
+  image:
+    name: container image and Compose stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: verify
+    steps:
+      - uses: actions/checkout@v7
+
+      # Throwaway credentials generated per run; nothing is stored or pushed.
+      - name: Generate CI-only .env
+        run: |
+          # Hex is a subset of base62, so it also fits the lk_ + 43 character key format.
+          rand() { openssl rand -hex 32 | cut -c "1-$1"; }
+          {
+            echo "MYSQL_ROOT_PASSWORD=$(rand 24)"
+            echo "LEDGER_DB_MIGRATION_USER=ledger_migrator"
+            echo "LEDGER_DB_MIGRATION_PASSWORD=$(rand 24)"
+            echo "LEDGER_DB_APP_USER=ledger_app"
+            echo "LEDGER_DB_APP_PASSWORD=$(rand 24)"
+            echo "LEDGER_BOOTSTRAP_ADMIN_KEY=lk_$(rand 43)"
+            echo "LEDGER_INTEGRITY_SCHEDULE_ENABLED=false"
+          } > .env
+
+      - name: Validate Compose file
+        run: docker compose config --quiet
+
+      - name: Build and start the stack
+        run: docker compose up -d --build --wait --wait-timeout 300
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          admin=$(grep '^LEDGER_BOOTSTRAP_ADMIN_KEY=' .env | cut -d= -f2)
+          curl -fsS http://127.0.0.1:8080/actuator/health/readiness
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/v1/accounts)
+          test "$code" = 401
+          curl -fsS -H "Authorization: Bearer $admin" -X POST http://127.0.0.1:8080/api/v1/ops/integrity-checks \
+            | grep -q '"clean":true'
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
