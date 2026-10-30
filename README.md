@@ -115,6 +115,7 @@ off by default.
 | `LEDGER_INTEGRITY_SCHEDULE_ENABLED` | no | Nightly integrity check (default `true`) |
 | `LEDGER_INTEGRITY_CRON` | no | Its Spring cron in the business zone (default `0 30 2 * * *`) |
 | `SPRING_PROFILES_ACTIVE` | no | `local` enables Swagger UI; leave empty in production |
+| `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE` | no | Database connection pool size (default 20) |
 
 ## API
 
